@@ -1,5 +1,6 @@
 import pygame
 from constants import *
+from menu import Button
 
 class UI:
     def __init__(self, screen):
@@ -13,6 +14,18 @@ class UI:
         self.panel_y = 0
         self.panel_width = UI_WIDTH
         self.panel_height = WINDOW_HEIGHT
+        # Bouton fin de tour
+        button_width = 200
+        button_height = 50
+        self.btn_end_turn = Button(
+            self.panel_x + (UI_WIDTH - button_width) // 2,
+            WINDOW_HEIGHT - 80,
+            button_width,
+            button_height,
+            "Fin de tour",
+            (39, 174, 96),
+            (46, 204, 113)
+        )
         
     def draw(self, game):
         # Fond du panneau
@@ -31,7 +44,8 @@ class UI:
         y_offset += 50
         
         # Pays actuellement joué (pour l'instant on met Rouge par défaut)
-        current_country = Country.RED
+        current_country = game.current_player_country
+        player = game.players[current_country]
         self.draw_section_title("Pays actuel", y_offset)
         y_offset += 30
         
@@ -44,7 +58,7 @@ class UI:
         y_offset += 40
         
         # Or (placeholder pour l'instant)
-        gold = 1000  # On mettra la vraie valeur plus tard
+        gold = player.gold
         text = self.font_normal.render(f"Or: {gold}", True, (255, 215, 0))
         self.screen.blit(text, (self.panel_x + 30, y_offset))
         y_offset += 50
@@ -85,7 +99,16 @@ class UI:
                 text = self.font_small.render("⭐ Capitale", True, (255, 215, 0))
                 self.screen.blit(text, (self.panel_x + 30, y_offset))
                 y_offset += 25
-        
+
+            # Armée
+            if cell.army:
+                y_offset += 10
+                army_name = UNIT_NAMES[cell.army.unit_type]
+                symbol = UNIT_SYMBOLS[cell.army.unit_type]
+                text = self.font_small.render(f"{symbol} {army_name} x{cell.army.count}", True, (255, 255, 100))
+                self.screen.blit(text, (self.panel_x + 30, y_offset))
+                y_offset += 25
+
         # Stats globales
         y_offset = WINDOW_HEIGHT - 150
         self.draw_section_title("Statistiques", y_offset)
@@ -100,7 +123,20 @@ class UI:
                 text = self.font_small.render(f"{count} cases", True, UI_TEXT_COLOR)
                 self.screen.blit(text, (self.panel_x + 45, y_offset))
                 y_offset += 22
+
+        # Bouton fin de tour
+        self.btn_end_turn.draw(self.screen, self.font_normal)
+
+        # Numéro de tour
+        turn_text = self.font_small.render(f"Tour: {game.turn_number}", True, UI_TEXT_COLOR)
+        self.screen.blit(turn_text, (self.panel_x + 20, WINDOW_HEIGHT - 120))
     
+    def handle_event(self, event):
+        """Gère les événements UI"""
+        if self.btn_end_turn.handle_event(event):
+            return "end_turn"
+        return None
+
     def draw_section_title(self, title, y):
         text = self.font_normal.render(title, True, UI_TITLE_COLOR)
         self.screen.blit(text, (self.panel_x + 20, y))

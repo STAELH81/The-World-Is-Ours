@@ -3,6 +3,10 @@ import sys
 from constants import *
 from cell import Cell
 from ui import UI
+from menu import Menu
+from army import Army
+from player import Player
+
 
 class Game:
     def __init__(self):
@@ -12,33 +16,124 @@ class Game:
         self.clock = pygame.time.Clock()
         self.running = True
         
-        # Grille de cellules
-        self.grid = [[Cell(x, y) for y in range(GRID_ROWS)] for x in range(GRID_COLS)]
+        # États du jeu
+        self.state = "menu"  # menu, playing
+        self.game_mode = None  # solo, godgame
         
-        # Cellule sélectionnée
+        # Menu
+        self.menu = Menu(self.screen)
+        
+        # Grille de cellules (sera initialisée au démarrage du jeu)
+        self.grid = None
         self.selected_cell = None
+        self.ui = None
 
-        # UI
+        # Joueurs
+        self.players = {}
+        self.current_player_country = Country.RED
+        self.turn_number = 1
+    
+    def start_game(self, mode):
+        """Démarre une nouvelle partie"""
+        self.game_mode = mode
+        self.state = "playing"
+        
+        # Initialise le jeu
+        self.grid = [[Cell(x, y) for y in range(GRID_ROWS)] for x in range(GRID_COLS)]
+        self.selected_cell = None
         self.ui = UI(self.screen)
         
         # Génère la map
         self.generate_map()
+
+        # Crée les joueurs
+        self.init_players()
     
+    def init_players(self):
+        """Initialise les joueurs selon le mode de jeu"""
+        self.players = {}
+
+        # Crée un joueur pour chaque pays actif
+        for country in [Country.RED, Country.GREEN, Country.BLUE, Country.YELLOW, Country.ORANGE]:
+            player = Player(country)
+
+            # En mode Solo, seul Rouge est humain
+            if self.game_mode == "solo" and country != Country.RED:
+                player.is_ai = True
+
+            self.players[country] = player
+
+        self.current_player_country = Country.RED
+        self.turn_number = 1
+
+        print(f"Partie démarrée en mode {self.game_mode}")
+        for country, player in self.players.items():
+            print(f"  {player} (IA: {player.is_ai})")
+
+    def next_turn(self):
+        """Passe au tour suivant"""
+        # Liste des pays dans l'ordre
+        countries = [Country.RED, Country.GREEN, Country.BLUE, Country.YELLOW, Country.ORANGE]
+
+        current_index = countries.index(self.current_player_country)
+        next_index = (current_index + 1) % len(countries)
+        self.current_player_country = countries[next_index]
+
+        # Si on revient au premier joueur, incrémente le numéro de tour
+        if self.current_player_country == Country.RED:
+            self.turn_number += 1
+            print(f"\n=== Tour {self.turn_number} ===")
+
+        # Génère l'or pour le joueur actuel
+        self.generate_income()
+
+        print(f"C'est au tour de {COUNTRY_NAMES[self.current_player_country]}")
+
+    def generate_income(self):
+        """Génère l'or pour le joueur actuel"""
+        player = self.players[self.current_player_country]
+
+        # Compte les capitales du joueur
+        capitals = 0
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = self.grid[x][y]
+                if cell.is_capital and cell.country == self.current_player_country:
+                    capitals += 1
+
+        # Chaque capitale génère 100 or
+        income = capitals * 100
+        player.add_gold(income)
+
+        print(f"{COUNTRY_NAMES[player.country]} gagne {income} or (Capitales: {capitals})")
+
     def place_capitals(self):
-        # Rouge - Île 1 (nord-ouest de l'île)
         self.grid[3][3].is_capital = True
-        # Vert - Île 1 (sud-est de l'île)
         self.grid[7][8].is_capital = True
-        # Bleu - Île 2
         self.grid[14][4].is_capital = True
-        # Jaune - Île 3
         self.grid[4][23].is_capital = True
-        # Orange - Île 4
-        self.grid[14][21].is_capital = True   
-        # Génère les capitales
+        self.grid[14][21].is_capital = True
+
+    def place_test_armies(self):
+        """Place quelques armées pour tester"""
+        # Rouge
+        self.grid[4][4].army = Army(Country.RED, UnitType.SWORDSMAN, 5)
+        self.grid[5][5].army = Army(Country.RED, UnitType.CAVALRY, 3)
+
+        # Vert
+        self.grid[8][9].army = Army(Country.GREEN, UnitType.CROSSBOWMAN, 4)
+
+        # Bleu
+        self.grid[14][5].army = Army(Country.BLUE, UnitType.SWORDSMAN, 6)
+
+        # Jaune
+        self.grid[4][24].army = Army(Country.YELLOW, UnitType.CAVALRY, 2)
+
+        # Orange
+        self.grid[15][22].army = Army(Country.ORANGE, UnitType.CROSSBOWMAN, 3)
 
     def generate_map(self):
-        # Île 1 - Nord-Ouest (Rouge + Vert)
+        # [Garde tout le code de generate_map exactement pareil]
         ile1 = [
             (2,2), (3,2), (4,2), (5,2), (6,2),
             (1,3), (2,3), (3,3), (4,3), (5,3), (6,3), (7,3),
@@ -70,7 +165,6 @@ class Game:
             (5,11), (6,11), (7,11),
         ]
         
-        # Île 2 - Nord-Est (Bleu)
         ile2 = [
             (13,1), (14,1), (15,1),
             (12,2), (13,2), (14,2), (15,2), (16,2),
@@ -82,7 +176,6 @@ class Game:
             (14,8), (15,8),
         ]
         
-        # Île 3 - Sud-Ouest (Jaune)
         ile3 = [
             (2,19), (3,19), (4,19),
             (1,20), (2,20), (3,20), (4,20), (5,20),
@@ -95,7 +188,6 @@ class Game:
             (4,27), (5,27),
         ]
         
-        # Île 4 - Sud-Est (Orange)
         ile4 = [
             (14,18), (15,18), (16,18),
             (13,19), (14,19), (15,19), (16,19), (17,19),
@@ -108,7 +200,6 @@ class Game:
             (14,26), (15,26),
         ]
         
-        # Île 5 - Petite île centrale (Rouge)
         ile5 = [
             (8,14), (9,14), (10,14),
             (7,15), (8,15), (9,15), (10,15), (11,15),
@@ -117,7 +208,6 @@ class Game:
             (9,18), (10,18), (11,18),
         ]
         
-        # Applique les terrains
         self.apply_terrain(ile1, TerrainType.PLAIN)
         self.apply_terrain([(2,2), (3,2), (2,3), (3,3), (2,4), (3,4)], TerrainType.MOUNTAIN)
         self.apply_terrain([(7,5), (8,5), (7,6), (8,6), (7,7), (8,7)], TerrainType.FOREST)
@@ -137,7 +227,6 @@ class Game:
         self.apply_terrain(ile5, TerrainType.PLAIN)
         self.apply_terrain([(9,15), (10,15), (9,16), (10,16)], TerrainType.MOUNTAIN)
         
-        # Applique les pays
         self.apply_country(rouge, Country.RED)
         self.apply_country(vert, Country.GREEN)
         self.apply_country(ile2, Country.BLUE)
@@ -145,10 +234,10 @@ class Game:
         self.apply_country(ile4, Country.ORANGE)
         self.apply_country(ile5, Country.RED)
         
-        # Génère les plages
         self.add_beaches()
-        self.place_capitals()     
-    
+        self.place_capitals()
+        self.place_test_armies()  # NOUVEAU
+
     def apply_terrain(self, coords, terrain):
         for x, y in coords:
             if 0 <= x < GRID_COLS and 0 <= y < GRID_ROWS:
@@ -175,35 +264,55 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # Clic gauche
-                x, y = event.pos
-                cell_x = x // CELL_SIZE
-                cell_y = y // CELL_SIZE
-                
-                if 0 <= cell_x < GRID_COLS and 0 <= cell_y < GRID_ROWS:
-                    # Désélectionne l'ancienne
-                    if self.selected_cell:
-                        self.selected_cell.is_selected = False
+            
+            if self.state == "menu":
+                action = self.menu.handle_event(event)
+                if action == "start_solo":
+                    self.start_game("solo")
+                elif action == "start_godgame":
+                    self.start_game("godgame")
+                elif action == "load":
+                    print("Chargement d'une partie (pas encore implémenté)")
+                elif action == "quit":
+                    self.running = False
+            
+            elif self.state == "playing":
+                # Gestion UI
+                ui_action = self.ui.handle_event(event)
+                if ui_action == "end_turn":
+                    self.next_turn()
+                    return
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    x, y = event.pos
+                    cell_x = x // CELL_SIZE
+                    cell_y = y // CELL_SIZE
                     
-                    # Sélectionne la nouvelle
-                    self.selected_cell = self.grid[cell_x][cell_y]
-                    self.selected_cell.is_selected = True
-                    
-                    print(f"Case ({cell_x}, {cell_y}) - Terrain: {self.selected_cell.terrain.name} - Pays: {self.selected_cell.country.name}")
+                    if 0 <= cell_x < GRID_COLS and 0 <= cell_y < GRID_ROWS:
+                        if self.selected_cell:
+                            self.selected_cell.is_selected = False
+                        
+                        self.selected_cell = self.grid[cell_x][cell_y]
+                        self.selected_cell.is_selected = True
+                        
+                        print(f"Case ({cell_x}, {cell_y}) - Terrain: {self.selected_cell.terrain.name} - Pays: {self.selected_cell.country.name}")
     
     def update(self):
         pass
     
     def draw(self):
-        self.screen.fill((0, 0, 0))
+        if self.state == "menu":
+            self.menu.draw()
         
-        # Dessine toutes les cellules
-        for x in range(GRID_COLS):
-            for y in range(GRID_ROWS):
-                self.grid[x][y].draw(self.screen)
-        
-        pygame.display.flip()
+        elif self.state == "playing":
+            self.screen.fill((0, 0, 0))
+            
+            for x in range(GRID_COLS):
+                for y in range(GRID_ROWS):
+                    self.grid[x][y].draw(self.screen)
+            
+            self.ui.draw(self)
+            
+            pygame.display.flip()
     
     def run(self):
         while self.running:
@@ -211,8 +320,6 @@ class Game:
             self.update()
             self.draw()
             self.clock.tick(60)
-            # Dessine l'UI
-            self.ui.draw(self)
         
         pygame.quit()
         sys.exit()

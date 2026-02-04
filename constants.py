@@ -69,3 +69,37 @@ TERRAIN_FULL_NAMES = {
 UI_BG_COLOR = (40, 40, 45)
 UI_TEXT_COLOR = (220, 220, 220)
 UI_TITLE_COLOR = (255, 255, 255)
+
+# Types d'unités
+class UnitType(Enum):
+    SWORDSMAN = 0  # Spadassin
+    CROSSBOWMAN = 1  # Arbalétrier
+    CAVALRY = 2  # Cavalerie
+
+# Noms des unités
+UNIT_NAMES = {
+    UnitType.SWORDSMAN: "Spadassin",
+    UnitType.CROSSBOWMAN: "Arbalétrier",
+    UnitType.CAVALRY: "Cavalerie",
+}
+
+# Icônes/symboles des unités (pour l'affichage)
+UNIT_SYMBOLS = {
+    UnitType.SWORDSMAN: "⚔",
+    UnitType.CROSSBOWMAN: "🏹",
+    UnitType.CAVALRY: "🐴",
+}
+
+# Coûts de recrutement
+UNIT_COSTS = {
+    UnitType.SWORDSMAN: 50,
+    UnitType.CROSSBOWMAN: 60,
+    UnitType.CAVALRY: 80,
+}
+
+# Stats de combat (pour plus tard)
+UNIT_STATS = {
+    UnitType.SWORDSMAN: {"attack": 3, "defense": 3},
+    UnitType.CROSSBOWMAN: {"attack": 4, "defense": 2},
+    UnitType.CAVALRY: {"attack": 5, "defense": 2},
+}

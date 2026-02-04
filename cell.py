@@ -8,35 +8,52 @@ class Cell:
         self.terrain = TerrainType.WATER
         self.country = Country.NONE
         self.is_selected = False
-        self.is_capital = False  # NOUVEAU
+        self.is_capital = False
+        self.army = None  # NOUVEAU : armée sur cette case
         
     def draw(self, surface):
-        # Position sur l'écran
         screen_x = self.x * CELL_SIZE
         screen_y = self.y * CELL_SIZE
         
-        # Couleur du terrain
         color = TERRAIN_COLORS[self.terrain]
         
-        # Si sélectionné, éclaircir
         if self.is_selected:
             color = tuple(min(255, c + 60) for c in color)
         
-        # Dessine la case
         pygame.draw.rect(surface, color, (screen_x, screen_y, CELL_SIZE, CELL_SIZE))
         
-        # Bordure pays
         if self.country != Country.NONE:
             border_color = COUNTRY_COLORS[self.country]
             pygame.draw.rect(surface, border_color, 
                            (screen_x, screen_y, CELL_SIZE, CELL_SIZE), 3)
         
-        # NOUVEAU : Dessine la capitale (cercle noir avec bord pays)
+        # Capitale
         if self.is_capital:
             center_x = screen_x + CELL_SIZE // 2
             center_y = screen_y + CELL_SIZE // 2
-            # Cercle extérieur (couleur du pays)
             pygame.draw.circle(surface, COUNTRY_COLORS[self.country], (center_x, center_y), 10)
-            # Cercle intérieur (noir)
             pygame.draw.circle(surface, (0, 0, 0), (center_x, center_y), 7)
-            return  # Skip le texte terrain si c'est une capitale
+            return
+        
+        # NOUVEAU : Affiche l'armée si présente
+        if self.army:
+            self.draw_army(surface, screen_x, screen_y)
+    
+    def draw_army(self, surface, screen_x, screen_y):
+        """Dessine l'armée sur la case"""
+        # Fond semi-transparent
+        army_bg = pygame.Surface((CELL_SIZE - 6, CELL_SIZE - 6), pygame.SRCALPHA)
+        army_bg.fill((*COUNTRY_COLORS[self.army.country], 180))
+        surface.blit(army_bg, (screen_x + 3, screen_y + 3))
+        
+        # Symbole de l'unité
+        font_symbol = pygame.font.Font(None, 20)
+        symbol = font_symbol.render(UNIT_SYMBOLS[self.army.unit_type], True, (255, 255, 255))
+        symbol_rect = symbol.get_rect(center=(screen_x + CELL_SIZE // 2, screen_y + 10))
+        surface.blit(symbol, symbol_rect)
+        
+        # Nombre d'unités
+        font_count = pygame.font.Font(None, 18)
+        count_text = font_count.render(f"x{self.army.count}", True, (255, 255, 255))
+        count_rect = count_text.get_rect(center=(screen_x + CELL_SIZE // 2, screen_y + CELL_SIZE - 8))
+        surface.blit(count_text, count_rect)
