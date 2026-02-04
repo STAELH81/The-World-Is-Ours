@@ -92,9 +92,9 @@ UNIT_SYMBOLS = {
 
 # Coûts de recrutement
 UNIT_COSTS = {
-    UnitType.SWORDSMAN: 50,
-    UnitType.CROSSBOWMAN: 60,
-    UnitType.CAVALRY: 80,
+    UnitType.SWORDSMAN: 45,
+    UnitType.CROSSBOWMAN: 45,
+    UnitType.CAVALRY: 45,
 }
 
 # Stats de combat (pour plus tard)

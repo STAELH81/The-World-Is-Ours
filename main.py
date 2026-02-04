@@ -49,6 +49,41 @@ class Game:
         # Crée les joueurs
         self.init_players()
     
+    def recruit_unit(self, unit_type):
+        """Recrute une unité sur la case sélectionnée"""
+        if not self.selected_cell:
+            print("Aucune case sélectionnée")
+            return
+        
+        cell = self.selected_cell
+        player = self.players[self.current_player_country]
+        
+        # Vérifications
+        if cell.country != self.current_player_country:
+            print("Vous ne pouvez recruter que sur vos territoires")
+            return
+        
+        if cell.terrain == TerrainType.WATER or cell.terrain == TerrainType.BEACH:
+            print("Impossible de recruter sur l'eau ou la plage")
+            return
+        
+        cost = UNIT_COSTS[unit_type]
+        if not player.can_afford(unit_type):
+            print(f"Pas assez d'or ! ({player.gold}/{cost})")
+            return
+        
+        # Recrute
+        player.spend_gold(cost)
+        
+        if cell.army and cell.army.unit_type == unit_type:
+            # Ajoute à l'armée existante
+            cell.army.count += 1
+        else:
+            # Crée une nouvelle armée (remplace l'ancienne si différente)
+            cell.army = Army(self.current_player_country, unit_type, 1)
+        
+        print(f"✓ {UNIT_NAMES[unit_type]} recruté ! Or restant: {player.gold}")
+
     def init_players(self):
         """Initialise les joueurs selon le mode de jeu"""
         self.players = {}
@@ -101,11 +136,17 @@ class Game:
                 if cell.is_capital and cell.country == self.current_player_country:
                     capitals += 1
 
-        # Chaque capitale génère 100 or
+        # Revenu des capitales
         income = capitals * 100
-        player.add_gold(income)
 
-        print(f"{COUNTRY_NAMES[player.country]} gagne {income} or (Capitales: {capitals})")
+        # Entretien des armées
+        upkeep = player.calculate_upkeep(self.grid)
+
+        # Total
+        net_income = income - upkeep
+        player.add_gold(net_income)
+
+        print(f"{COUNTRY_NAMES[player.country]} : +{income} or (Capitales) -{upkeep} or (Entretien) = {net_income} or net")
 
     def place_capitals(self):
         self.grid[3][3].is_capital = True
@@ -261,6 +302,16 @@ class Game:
                                 break
     
     def handle_events(self):
+        # Gestion UI
+        ui_action = self.ui.handle_event(event)
+        if ui_action == "end_turn":
+            self.next_turn()
+            return
+        elif ui_action and ui_action[0] == "recruit":
+            unit_type = ui_action[1]
+            self.recruit_unit(unit_type)
+            return
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False

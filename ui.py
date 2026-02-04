@@ -1,6 +1,7 @@
 import pygame
 from constants import *
 from menu import Button
+from constants import *, UnitType
 
 class UI:
     def __init__(self, screen):
@@ -14,6 +15,7 @@ class UI:
         self.panel_y = 0
         self.panel_width = UI_WIDTH
         self.panel_height = WINDOW_HEIGHT
+
         # Bouton fin de tour
         button_width = 200
         button_height = 50
@@ -26,61 +28,101 @@ class UI:
             (39, 174, 96),
             (46, 204, 113)
         )
-        
+        # Boutons de recrutement
+        recruit_y = 500  # Position de départ
+        button_small_width = 250
+        button_small_height = 40
+        spacing = 10
+
+        self.btn_recruit_swordsman = Button(
+            self.panel_x + 25,
+            recruit_y,
+            button_small_width,
+            button_small_height,
+            f"⚔ Spadassin ({UNIT_COSTS[UnitType.SWORDSMAN]} or)",
+            (41, 128, 185),
+            (52, 152, 219)
+        )
+
+        self.btn_recruit_crossbowman = Button(
+            self.panel_x + 25,
+            recruit_y + button_small_height + spacing,
+            button_small_width,
+            button_small_height,
+            f"🏹 Arbalétrier ({UNIT_COSTS[UnitType.CROSSBOWMAN]} or)",
+            (142, 68, 173),
+            (155, 89, 182)
+        )
+
+        self.btn_recruit_cavalry = Button(
+            self.panel_x + 25,
+            recruit_y + (button_small_height + spacing) * 2,
+            button_small_width,
+            button_small_height,
+            f"🐴 Cavalerie ({UNIT_COSTS[UnitType.CAVALRY]} or)",
+            (230, 126, 34),
+            (243, 156, 18)
+        )
+
     def draw(self, game):
         # Fond du panneau
         pygame.draw.rect(self.screen, UI_BG_COLOR, 
                         (self.panel_x, self.panel_y, self.panel_width, self.panel_height))
-        
+
         # Ligne de séparation
         pygame.draw.line(self.screen, (80, 80, 85), 
                         (self.panel_x, 0), (self.panel_x, WINDOW_HEIGHT), 2)
-        
+
         y_offset = 20
-        
+
         # Titre
         title = self.font_title.render("The World Is Ours", True, UI_TITLE_COLOR)
         self.screen.blit(title, (self.panel_x + 20, y_offset))
-        y_offset += 50
-        
-        # Pays actuellement joué (pour l'instant on met Rouge par défaut)
+        y_offset += 40
+
+        # Numéro de tour (déplacé en haut)
+        turn_text = self.font_small.render(f"Tour: {game.turn_number}", True, (150, 150, 150))
+        self.screen.blit(turn_text, (self.panel_x + 20, y_offset))
+        y_offset += 40
+
+        # Pays actuellement joué
         current_country = game.current_player_country
         player = game.players[current_country]
         self.draw_section_title("Pays actuel", y_offset)
         y_offset += 30
-        
+
         # Nom et couleur du pays
         country_name = COUNTRY_NAMES[current_country]
         pygame.draw.circle(self.screen, COUNTRY_COLORS[current_country], 
                           (self.panel_x + 30, y_offset + 10), 8)
         text = self.font_normal.render(country_name, True, UI_TEXT_COLOR)
         self.screen.blit(text, (self.panel_x + 50, y_offset))
-        y_offset += 40
-        
-        # Or (placeholder pour l'instant)
+        y_offset += 35
+
+        # Or
         gold = player.gold
         text = self.font_normal.render(f"Or: {gold}", True, (255, 215, 0))
         self.screen.blit(text, (self.panel_x + 30, y_offset))
-        y_offset += 50
-        
+        y_offset += 45
+
         # Infos case sélectionnée
         if game.selected_cell:
             self.draw_section_title("Case sélectionnée", y_offset)
             y_offset += 30
-            
+
             cell = game.selected_cell
-            
+
             # Position
             text = self.font_small.render(f"Position: ({cell.x}, {cell.y})", True, UI_TEXT_COLOR)
             self.screen.blit(text, (self.panel_x + 30, y_offset))
-            y_offset += 25
-            
+            y_offset += 22
+
             # Terrain
             terrain_name = TERRAIN_FULL_NAMES[cell.terrain]
             text = self.font_small.render(f"Terrain: {terrain_name}", True, UI_TEXT_COLOR)
             self.screen.blit(text, (self.panel_x + 30, y_offset))
-            y_offset += 25
-            
+            y_offset += 22
+
             # Pays
             if cell.country != Country.NONE:
                 country_name = COUNTRY_NAMES[cell.country]
@@ -88,32 +130,33 @@ class UI:
                                  (self.panel_x + 40, y_offset + 8), 6)
                 text = self.font_small.render(country_name, True, UI_TEXT_COLOR)
                 self.screen.blit(text, (self.panel_x + 55, y_offset))
-                y_offset += 25
+                y_offset += 22
             else:
                 text = self.font_small.render("Pays: Neutre", True, UI_TEXT_COLOR)
                 self.screen.blit(text, (self.panel_x + 30, y_offset))
-                y_offset += 25
-            
+                y_offset += 22
+
             # Capitale
             if cell.is_capital:
                 text = self.font_small.render("⭐ Capitale", True, (255, 215, 0))
                 self.screen.blit(text, (self.panel_x + 30, y_offset))
-                y_offset += 25
+                y_offset += 22
 
             # Armée
             if cell.army:
-                y_offset += 10
+                y_offset += 5
                 army_name = UNIT_NAMES[cell.army.unit_type]
                 symbol = UNIT_SYMBOLS[cell.army.unit_type]
                 text = self.font_small.render(f"{symbol} {army_name} x{cell.army.count}", True, (255, 255, 100))
                 self.screen.blit(text, (self.panel_x + 30, y_offset))
-                y_offset += 25
+                y_offset += 22
 
-        # Stats globales
-        y_offset = WINDOW_HEIGHT - 150
+            y_offset += 20
+
+        # Stats globales (déplacées plus haut pour éviter le bouton)
         self.draw_section_title("Statistiques", y_offset)
         y_offset += 30
-        
+
         # Compte les territoires par pays
         territories = self.count_territories(game)
         for country, count in territories.items():
@@ -122,19 +165,41 @@ class UI:
                                  (self.panel_x + 30, y_offset + 8), 6)
                 text = self.font_small.render(f"{count} cases", True, UI_TEXT_COLOR)
                 self.screen.blit(text, (self.panel_x + 45, y_offset))
-                y_offset += 22
+                y_offset += 20
 
-        # Bouton fin de tour
+        # Section recrutement
+        recruit_y = WINDOW_HEIGHT - 260
+        self.draw_section_title("Recrutement", recruit_y)
+        recruit_y += 35
+
+        # Affiche les boutons seulement si une case du joueur est sélectionnée
+        if game.selected_cell and game.selected_cell.country == current_country:
+            self.btn_recruit_swordsman.draw(self.screen, self.font_small)
+            self.btn_recruit_crossbowman.draw(self.screen, self.font_small)
+            self.btn_recruit_cavalry.draw(self.screen, self.font_small)
+        else:
+            # Message si pas de case sélectionnée
+            msg = self.font_small.render("Sélectionnez une", True, (150, 150, 150))
+            msg2 = self.font_small.render("case pour recruter", True, (150, 150, 150))
+            self.screen.blit(msg, (self.panel_x + 60, recruit_y + 30))
+            self.screen.blit(msg2, (self.panel_x + 50, recruit_y + 50))
+            
+        # Bouton fin de tour (tout en bas, fixe)
         self.btn_end_turn.draw(self.screen, self.font_normal)
-
-        # Numéro de tour
-        turn_text = self.font_small.render(f"Tour: {game.turn_number}", True, UI_TEXT_COLOR)
-        self.screen.blit(turn_text, (self.panel_x + 20, WINDOW_HEIGHT - 120))
     
     def handle_event(self, event):
         """Gère les événements UI"""
         if self.btn_end_turn.handle_event(event):
             return "end_turn"
+        
+        # Recrutement
+        if self.btn_recruit_swordsman.handle_event(event):
+            return ("recruit", UnitType.SWORDSMAN)
+        if self.btn_recruit_crossbowman.handle_event(event):
+            return ("recruit", UnitType.CROSSBOWMAN)
+        if self.btn_recruit_cavalry.handle_event(event):
+            return ("recruit", UnitType.CAVALRY)
+        
         return None
 
     def draw_section_title(self, title, y):
