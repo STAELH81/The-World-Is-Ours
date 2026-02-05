@@ -9,7 +9,8 @@ class Cell:
         self.country = Country.NONE
         self.is_selected = False
         self.is_capital = False
-        self.army = None  # NOUVEAU : armée sur cette case
+        self.is_city = False  # NOUVEAU
+        self.army = None
         
     def draw(self, surface):
         screen_x = self.x * CELL_SIZE
@@ -33,6 +34,17 @@ class Cell:
             center_y = screen_y + CELL_SIZE // 2
             pygame.draw.circle(surface, COUNTRY_COLORS[self.country], (center_x, center_y), 10)
             pygame.draw.circle(surface, (0, 0, 0), (center_x, center_y), 7)
+            return
+        
+        # Ville
+        if self.is_city:
+            center_x = screen_x + CELL_SIZE // 2
+            center_y = screen_y + CELL_SIZE // 2
+            # Carré pour la ville
+            pygame.draw.rect(surface, COUNTRY_COLORS[self.country], 
+                            (center_x - 8, center_y - 8, 16, 16))
+            pygame.draw.rect(surface, (0, 0, 0), 
+                            (center_x - 6, center_y - 6, 12, 12))
             return
         
         # NOUVEAU : Affiche l'armée si présente

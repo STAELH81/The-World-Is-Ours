@@ -1,7 +1,6 @@
 import pygame
 from constants import *
 from menu import Button
-from constants import *, UnitType
 
 class UI:
     def __init__(self, screen):
@@ -33,6 +32,17 @@ class UI:
         button_small_width = 250
         button_small_height = 40
         spacing = 10
+
+        # Bouton construction ville
+        self.btn_build_city = Button(
+            self.panel_x + 25,
+            recruit_y + (button_small_height + spacing) * 3,
+            button_small_width,
+            button_small_height,
+            f"🏘 Construire ville (150 or)",
+            (39, 174, 96),
+            (46, 204, 113)
+        )
 
         self.btn_recruit_swordsman = Button(
             self.panel_x + 25,
@@ -123,6 +133,18 @@ class UI:
             self.screen.blit(text, (self.panel_x + 30, y_offset))
             y_offset += 22
 
+            # Capitale
+            if cell.is_capital:
+                text = self.font_small.render("⭐ Capitale", True, (255, 215, 0))
+                self.screen.blit(text, (self.panel_x + 30, y_offset))
+                y_offset += 22
+            
+            # Ville
+            if cell.is_city:
+                text = self.font_small.render("🏘 Ville", True, (100, 200, 100))
+                self.screen.blit(text, (self.panel_x + 30, y_offset))
+                y_offset += 22
+
             # Pays
             if cell.country != Country.NONE:
                 country_name = COUNTRY_NAMES[cell.country]
@@ -167,6 +189,12 @@ class UI:
                 self.screen.blit(text, (self.panel_x + 45, y_offset))
                 y_offset += 20
 
+        if game.selected_cell and game.selected_cell.country == current_country:
+            self.btn_recruit_swordsman.draw(self.screen, self.font_small)
+            self.btn_recruit_crossbowman.draw(self.screen, self.font_small)
+            self.btn_recruit_cavalry.draw(self.screen, self.font_small)
+            self.btn_build_city.draw(self.screen, self.font_small)  # ← AJOUTE
+
         # Section recrutement
         recruit_y = WINDOW_HEIGHT - 260
         self.draw_section_title("Recrutement", recruit_y)
@@ -183,7 +211,7 @@ class UI:
             msg2 = self.font_small.render("case pour recruter", True, (150, 150, 150))
             self.screen.blit(msg, (self.panel_x + 60, recruit_y + 30))
             self.screen.blit(msg2, (self.panel_x + 50, recruit_y + 50))
-            
+
         # Bouton fin de tour (tout en bas, fixe)
         self.btn_end_turn.draw(self.screen, self.font_normal)
     
@@ -191,6 +219,10 @@ class UI:
         """Gère les événements UI"""
         if self.btn_end_turn.handle_event(event):
             return "end_turn"
+        
+        # Construction ville
+        if self.btn_build_city.handle_event(event):
+            return "build_city"
         
         # Recrutement
         if self.btn_recruit_swordsman.handle_event(event):

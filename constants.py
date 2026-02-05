@@ -97,6 +97,21 @@ UNIT_COSTS = {
     UnitType.CAVALRY: 45,
 }
 
+# Coût d'entretien par tour
+UNIT_UPKEEP = 5 
+
+# Villes
+CITY_COST = 150  # Coût de construction d'une ville
+CITY_INCOME = 50  # Or généré par ville par tour
+CITY_TERRITORY_REQUIREMENT = 25  # Cases nécessaires pour 1 ville
+
+# Stats de combat (pour plus tard)
+UNIT_STATS = {
+    UnitType.SWORDSMAN: {"attack": 3, "defense": 3},
+    UnitType.CROSSBOWMAN: {"attack": 4, "defense": 2},
+    UnitType.CAVALRY: {"attack": 5, "defense": 2},
+}
+
 # Stats de combat (pour plus tard)
 UNIT_STATS = {
     UnitType.SWORDSMAN: {"attack": 3, "defense": 3},
