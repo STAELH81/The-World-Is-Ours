@@ -32,7 +32,13 @@ class Game:
         self.players = {}
         self.current_player_country = Country.RED
         self.turn_number = 1
-    
+
+        # Grille de cellules (sera initialisée au démarrage du jeu)
+        self.grid = None
+        self.selected_cell = None
+        self.selected_army_cell = None  # NOUVEAU : case avec armée sélectionnée pour mouvement
+        self.ui = None
+
     def start_game(self, mode):
         """Démarre une nouvelle partie"""
         self.game_mode = mode
@@ -129,6 +135,126 @@ class Game:
         cell.is_city = True
 
         print(f"✓ Ville construite ! Or restant: {player.gold} - Villes: {current_cities + 1}/{max_cities}")
+
+    def move_army(self, from_cell, to_cell):
+        """Déplace une armée d'une case à une autre"""
+        if not from_cell.army:
+            print("Pas d'armée à déplacer")
+            return
+
+        army = from_cell.army
+
+        # Vérifications
+        if army.country != self.current_player_country:
+            print("Ce n'est pas votre armée")
+            return
+
+        if to_cell.terrain == TerrainType.WATER:
+            print("Impossible de se déplacer sur l'eau")
+            return
+
+        # Calcul de distance (Manhattan)
+        distance = abs(from_cell.x - to_cell.x) + abs(from_cell.y - to_cell.y)
+        if distance > MOVEMENT_RANGE:
+            print(f"Trop loin ! Distance max: {MOVEMENT_RANGE}")
+            return
+
+        # Si case ennemie avec armée → COMBAT
+        if to_cell.army and to_cell.army.country != self.current_player_country:
+            self.battle(from_cell, to_cell)
+            return
+
+        # Si case ennemie vide → CONQUÊTE + DÉPLACEMENT
+        if to_cell.country != Country.NONE and to_cell.country != self.current_player_country:
+            print(f"⚔️ Conquête de {COUNTRY_NAMES[to_cell.country]} !")
+            to_cell.country = self.current_player_country
+
+        # Déplacement simple
+        if to_cell.army:
+            # Fusion d'armées du même type
+            if to_cell.army.unit_type == army.unit_type:
+                to_cell.army.count += army.count
+                from_cell.army = None
+                print(f"✓ Armées fusionnées ! ({to_cell.army.count} {UNIT_NAMES[army.unit_type]})")
+            else:
+                print("Impossible de fusionner des types d'unités différents")
+                return
+        else:
+            # Déplacement simple
+            to_cell.army = army
+            from_cell.army = None
+            print(f"✓ Déplacement effectué")
+
+    def battle(self, attacker_cell, defender_cell):
+        """Gère un combat entre deux armées"""
+        attacker = attacker_cell.army
+        defender = defender_cell.army
+        
+        print(f"\n⚔️ COMBAT ! {COUNTRY_NAMES[attacker.country]} vs {COUNTRY_NAMES[defender.country]}")
+        print(f"  Attaquant: {attacker.count}x {UNIT_NAMES[attacker.unit_type]}")
+        print(f"  Défenseur: {defender.count}x {UNIT_NAMES[defender.unit_type]} (Terrain: {defender_cell.terrain.name})")
+        
+        # Système RPS (Pierre-Papier-Ciseaux)
+        # Spadassin > Arbalétrier > Cavalerie > Spadassin
+        attacker_type = attacker.unit_type
+        defender_type = defender.unit_type
+        
+        attacker_advantage = 0
+        
+        if attacker_type == UnitType.SWORDSMAN and defender_type == UnitType.CROSSBOWMAN:
+            attacker_advantage = 1
+        elif attacker_type == UnitType.CROSSBOWMAN and defender_type == UnitType.CAVALRY:
+            attacker_advantage = 1
+        elif attacker_type == UnitType.CAVALRY and defender_type == UnitType.SWORDSMAN:
+            attacker_advantage = 1
+        elif defender_type == UnitType.SWORDSMAN and attacker_type == UnitType.CROSSBOWMAN:
+            attacker_advantage = -1
+        elif defender_type == UnitType.CROSSBOWMAN and attacker_type == UnitType.CAVALRY:
+            attacker_advantage = -1
+        elif defender_type == UnitType.CAVALRY and attacker_type == UnitType.SWORDSMAN:
+            attacker_advantage = -1
+        
+        # Bonus de terrain pour le défenseur
+        terrain_bonus = TERRAIN_DEFENSE_BONUS[defender_cell.terrain]
+        
+        # Calcul des forces
+        attacker_power = attacker.count * (UNIT_STATS[attacker_type]["attack"] + attacker_advantage)
+        defender_power = defender.count * (UNIT_STATS[defender_type]["defense"] + terrain_bonus)
+        
+        print(f"  Force attaquant: {attacker_power} (avantage RPS: {attacker_advantage:+d})")
+        print(f"  Force défenseur: {defender_power} (bonus terrain: +{terrain_bonus})")
+        
+        # Résolution
+        if attacker_power > defender_power:
+            # Victoire attaquant
+            losses = max(1, defender.count // 2)  # L'attaquant perd 50% du défenseur
+            attacker.count = max(1, attacker.count - losses)
+            
+            print(f"✓ {COUNTRY_NAMES[attacker.country]} gagne ! (pertes: {losses})")
+            
+            # Conquête
+            defender_cell.country = attacker.country
+            defender_cell.army = attacker
+            attacker_cell.army = None
+            
+        elif defender_power > attacker_power:
+            # Victoire défenseur
+            losses = max(1, attacker.count // 2)
+            defender.count = max(1, defender.count - losses)
+            
+            print(f"✓ {COUNTRY_NAMES[defender.country]} défend avec succès ! (pertes: {losses})")
+            
+            # Attaquant détruit
+            attacker_cell.army = None
+            
+        else:
+            # Égalité - les deux perdent des unités
+            attacker.count = max(1, attacker.count - 1)
+            defender.count = max(1, defender.count - 1)
+            
+            print(f"⚔️ Combat indécis ! Les deux camps subissent des pertes")
+            
+            # Attaquant ne bouge pas
 
     def init_players(self):
         """Initialise les joueurs selon le mode de jeu"""
@@ -369,6 +495,12 @@ class Game:
                 elif action == "quit":
                     self.running = False
             
+            elif ui_action == "move_army":
+                if self.selected_cell and self.selected_cell.army:
+                    self.selected_army_cell = self.selected_cell
+                    print(f"➡️ Cliquez sur une case pour déplacer {UNIT_NAMES[self.selected_cell.army.unit_type]}")
+                continue
+
             elif self.state == "playing":
                 # Gestion UI
                 ui_action = self.ui.handle_event(event)
@@ -388,15 +520,26 @@ class Game:
                     x, y = event.pos
                     cell_x = x // CELL_SIZE
                     cell_y = y // CELL_SIZE
-                    
+
                     if 0 <= cell_x < GRID_COLS and 0 <= cell_y < GRID_ROWS:
-                        if self.selected_cell:
-                            self.selected_cell.is_selected = False
-                        
-                        self.selected_cell = self.grid[cell_x][cell_y]
-                        self.selected_cell.is_selected = True
-                        
-                        print(f"Case ({cell_x}, {cell_y}) - Terrain: {self.selected_cell.terrain.name} - Pays: {self.selected_cell.country.name}")
+                        clicked_cell = self.grid[cell_x][cell_y]
+
+                        # Si on a déjà une armée sélectionnée pour le mouvement
+                        if self.selected_army_cell:
+                            # Tente de déplacer vers la case cliquée
+                            self.move_army(self.selected_army_cell, clicked_cell)
+                            self.selected_army_cell = None
+
+                        # Sinon, sélection normale
+                        else:
+                            if self.selected_cell:
+                                self.selected_cell.is_selected = False
+
+                            self.selected_cell = clicked_cell
+                            self.selected_cell.is_selected = True
+
+                            print(f"Case ({cell_x}, {cell_y}) - Terrain: {self.selected_cell.terrain.name} - Pays: {self.selected_cell.country.name}")
+
     def update(self):
         pass
     

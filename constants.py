@@ -118,3 +118,15 @@ UNIT_STATS = {
     UnitType.CROSSBOWMAN: {"attack": 4, "defense": 2},
     UnitType.CAVALRY: {"attack": 5, "defense": 2},
 }
+
+# Mouvement
+MOVEMENT_RANGE = 3  # Nombre de cases max par déplacement
+
+# Bonus de combat selon terrain
+TERRAIN_DEFENSE_BONUS = {
+    TerrainType.PLAIN: 0,
+    TerrainType.MOUNTAIN: 2,  # +2 défense en montagne
+    TerrainType.FOREST: 1,    # +1 défense en forêt
+    TerrainType.WATER: 0,
+    TerrainType.BEACH: 0,
+}

@@ -74,6 +74,17 @@ class UI:
             (243, 156, 18)
         )
 
+        # Bouton déplacement
+        self.btn_move_army = Button(
+            self.panel_x + 25,
+            recruit_y + (button_small_height + spacing) * 4,
+            button_small_width,
+            button_small_height,
+            f"➡️ Déplacer armée",
+            (52, 73, 94),
+            (71, 94, 121)
+        )
+
     def draw(self, game):
         # Fond du panneau
         pygame.draw.rect(self.screen, UI_BG_COLOR, 
@@ -114,6 +125,16 @@ class UI:
         text = self.font_normal.render(f"Or: {gold}", True, (255, 215, 0))
         self.screen.blit(text, (self.panel_x + 30, y_offset))
         y_offset += 45
+    
+    # Bouton déplacement seulement si armée présente
+    if game.selected_cell.army:
+        self.btn_move_army.draw(self.screen, self.font_small)
+
+        if game.selected_cell and game.selected_cell.country == current_country:
+            self.btn_recruit_swordsman.draw(self.screen, self.font_small)
+            self.btn_recruit_crossbowman.draw(self.screen, self.font_small)
+            self.btn_recruit_cavalry.draw(self.screen, self.font_small)
+            self.btn_build_city.draw(self.screen, self.font_small)
 
         # Infos case sélectionnée
         if game.selected_cell:
@@ -138,7 +159,7 @@ class UI:
                 text = self.font_small.render("⭐ Capitale", True, (255, 215, 0))
                 self.screen.blit(text, (self.panel_x + 30, y_offset))
                 y_offset += 22
-            
+
             # Ville
             if cell.is_city:
                 text = self.font_small.render("🏘 Ville", True, (100, 200, 100))
@@ -224,6 +245,10 @@ class UI:
         if self.btn_build_city.handle_event(event):
             return "build_city"
         
+        # Déplacement
+        if self.btn_move_army.handle_event(event):
+            return "move_army"
+
         # Recrutement
         if self.btn_recruit_swordsman.handle_event(event):
             return ("recruit", UnitType.SWORDSMAN)
