@@ -1,5 +1,4 @@
 from constants import *
-from constants import GRID_COLS, GRID_ROWS, UNIT_UPKEEP
 from constants import GRID_COLS, GRID_ROWS, UNIT_UPKEEP, UNIT_COSTS, COUNTRY_NAMES, CITY_TERRITORY_REQUIREMENT
 
 class Player:

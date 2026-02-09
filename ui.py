@@ -27,22 +27,12 @@ class UI:
             (39, 174, 96),
             (46, 204, 113)
         )
+        
         # Boutons de recrutement
-        recruit_y = 500  # Position de départ
+        recruit_y = 500
         button_small_width = 250
         button_small_height = 40
         spacing = 10
-
-        # Bouton construction ville
-        self.btn_build_city = Button(
-            self.panel_x + 25,
-            recruit_y + (button_small_height + spacing) * 3,
-            button_small_width,
-            button_small_height,
-            f"🏘 Construire ville (150 or)",
-            (39, 174, 96),
-            (46, 204, 113)
-        )
 
         self.btn_recruit_swordsman = Button(
             self.panel_x + 25,
@@ -74,6 +64,17 @@ class UI:
             (243, 156, 18)
         )
 
+        # Bouton construction ville
+        self.btn_build_city = Button(
+            self.panel_x + 25,
+            recruit_y + (button_small_height + spacing) * 3,
+            button_small_width,
+            button_small_height,
+            f"🏘 Construire ville (150 or)",
+            (39, 174, 96),
+            (46, 204, 113)
+        )
+
         # Bouton déplacement
         self.btn_move_army = Button(
             self.panel_x + 25,
@@ -101,7 +102,7 @@ class UI:
         self.screen.blit(title, (self.panel_x + 20, y_offset))
         y_offset += 40
 
-        # Numéro de tour (déplacé en haut)
+        # Numéro de tour
         turn_text = self.font_small.render(f"Tour: {game.turn_number}", True, (150, 150, 150))
         self.screen.blit(turn_text, (self.panel_x + 20, y_offset))
         y_offset += 40
@@ -125,16 +126,6 @@ class UI:
         text = self.font_normal.render(f"Or: {gold}", True, (255, 215, 0))
         self.screen.blit(text, (self.panel_x + 30, y_offset))
         y_offset += 45
-    
-    # Bouton déplacement seulement si armée présente
-    if game.selected_cell.army:
-        self.btn_move_army.draw(self.screen, self.font_small)
-
-        if game.selected_cell and game.selected_cell.country == current_country:
-            self.btn_recruit_swordsman.draw(self.screen, self.font_small)
-            self.btn_recruit_crossbowman.draw(self.screen, self.font_small)
-            self.btn_recruit_cavalry.draw(self.screen, self.font_small)
-            self.btn_build_city.draw(self.screen, self.font_small)
 
         # Infos case sélectionnée
         if game.selected_cell:
@@ -153,18 +144,6 @@ class UI:
             text = self.font_small.render(f"Terrain: {terrain_name}", True, UI_TEXT_COLOR)
             self.screen.blit(text, (self.panel_x + 30, y_offset))
             y_offset += 22
-
-            # Capitale
-            if cell.is_capital:
-                text = self.font_small.render("⭐ Capitale", True, (255, 215, 0))
-                self.screen.blit(text, (self.panel_x + 30, y_offset))
-                y_offset += 22
-
-            # Ville
-            if cell.is_city:
-                text = self.font_small.render("🏘 Ville", True, (100, 200, 100))
-                self.screen.blit(text, (self.panel_x + 30, y_offset))
-                y_offset += 22
 
             # Pays
             if cell.country != Country.NONE:
@@ -185,6 +164,12 @@ class UI:
                 self.screen.blit(text, (self.panel_x + 30, y_offset))
                 y_offset += 22
 
+            # Ville
+            if cell.is_city:
+                text = self.font_small.render("🏘 Ville", True, (100, 200, 100))
+                self.screen.blit(text, (self.panel_x + 30, y_offset))
+                y_offset += 22
+
             # Armée
             if cell.army:
                 y_offset += 5
@@ -196,7 +181,7 @@ class UI:
 
             y_offset += 20
 
-        # Stats globales (déplacées plus haut pour éviter le bouton)
+        # Stats globales
         self.draw_section_title("Statistiques", y_offset)
         y_offset += 30
 
@@ -210,12 +195,6 @@ class UI:
                 self.screen.blit(text, (self.panel_x + 45, y_offset))
                 y_offset += 20
 
-        if game.selected_cell and game.selected_cell.country == current_country:
-            self.btn_recruit_swordsman.draw(self.screen, self.font_small)
-            self.btn_recruit_crossbowman.draw(self.screen, self.font_small)
-            self.btn_recruit_cavalry.draw(self.screen, self.font_small)
-            self.btn_build_city.draw(self.screen, self.font_small)  # ← AJOUTE
-
         # Section recrutement
         recruit_y = WINDOW_HEIGHT - 260
         self.draw_section_title("Recrutement", recruit_y)
@@ -226,6 +205,11 @@ class UI:
             self.btn_recruit_swordsman.draw(self.screen, self.font_small)
             self.btn_recruit_crossbowman.draw(self.screen, self.font_small)
             self.btn_recruit_cavalry.draw(self.screen, self.font_small)
+            self.btn_build_city.draw(self.screen, self.font_small)
+            
+            # Bouton déplacement seulement si armée présente
+            if game.selected_cell.army:
+                self.btn_move_army.draw(self.screen, self.font_small)
         else:
             # Message si pas de case sélectionnée
             msg = self.font_small.render("Sélectionnez une", True, (150, 150, 150))
@@ -233,7 +217,7 @@ class UI:
             self.screen.blit(msg, (self.panel_x + 60, recruit_y + 30))
             self.screen.blit(msg2, (self.panel_x + 50, recruit_y + 50))
 
-        # Bouton fin de tour (tout en bas, fixe)
+        # Bouton fin de tour
         self.btn_end_turn.draw(self.screen, self.font_normal)
     
     def handle_event(self, event):

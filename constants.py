@@ -112,13 +112,6 @@ UNIT_STATS = {
     UnitType.CAVALRY: {"attack": 5, "defense": 2},
 }
 
-# Stats de combat (pour plus tard)
-UNIT_STATS = {
-    UnitType.SWORDSMAN: {"attack": 3, "defense": 3},
-    UnitType.CROSSBOWMAN: {"attack": 4, "defense": 2},
-    UnitType.CAVALRY: {"attack": 5, "defense": 2},
-}
-
 # Mouvement
 MOVEMENT_RANGE = 3  # Nombre de cases max par déplacement
 
