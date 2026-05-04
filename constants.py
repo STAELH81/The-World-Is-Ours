@@ -3,10 +3,10 @@ from enum import Enum
 # Taille de la grille
 GRID_COLS = 20
 GRID_ROWS = 30
-CELL_SIZE = 32
+CELL_SIZE = 34
 
 # UI
-UI_WIDTH = 300  # NOUVEAU
+UI_WIDTH = 380
 WINDOW_WIDTH = GRID_COLS * CELL_SIZE + UI_WIDTH  # MODIFIÉ
 WINDOW_HEIGHT = GRID_ROWS * CELL_SIZE
 
@@ -17,6 +17,7 @@ class TerrainType(Enum):
     FOREST = 2
     WATER = 3
     BEACH = 4
+    BRIDGE = 5
 
 # Pays
 class Country(Enum):
@@ -34,6 +35,7 @@ TERRAIN_COLORS = {
     TerrainType.FOREST: (45, 90, 27),
     TerrainType.WATER: (26, 58, 107),
     TerrainType.BEACH: (212, 197, 160),
+    TerrainType.BRIDGE: (127, 101, 65),
 }
 
 # Couleurs des pays
@@ -63,6 +65,7 @@ TERRAIN_FULL_NAMES = {
     TerrainType.FOREST: "Forêt",
     TerrainType.WATER: "Eau",
     TerrainType.BEACH: "Plage",
+    TerrainType.BRIDGE: "Pont",
 }
 
 # Couleurs UI - NOUVEAU
@@ -92,9 +95,9 @@ UNIT_SYMBOLS = {
 
 # Coûts de recrutement
 UNIT_COSTS = {
-    UnitType.SWORDSMAN: 45,
-    UnitType.CROSSBOWMAN: 45,
-    UnitType.CAVALRY: 45,
+    UnitType.SWORDSMAN: 40,
+    UnitType.CROSSBOWMAN: 55,
+    UnitType.CAVALRY: 70,
 }
 
 # Coût d'entretien par tour
@@ -104,16 +107,25 @@ UNIT_UPKEEP = 5
 CITY_COST = 150  # Coût de construction d'une ville
 CITY_INCOME = 50  # Or généré par ville par tour
 CITY_TERRITORY_REQUIREMENT = 25  # Cases nécessaires pour 1 ville
+BRIDGE_COST = 90
 
 # Stats de combat (pour plus tard)
 UNIT_STATS = {
-    UnitType.SWORDSMAN: {"attack": 3, "defense": 3},
-    UnitType.CROSSBOWMAN: {"attack": 4, "defense": 2},
-    UnitType.CAVALRY: {"attack": 5, "defense": 2},
+    UnitType.SWORDSMAN: {"attack": 3, "defense": 4},
+    UnitType.CROSSBOWMAN: {"attack": 5, "defense": 2},
+    UnitType.CAVALRY: {"attack": 4, "defense": 3},
 }
 
 # Mouvement
 MOVEMENT_RANGE = 3  # Nombre de cases max par déplacement
+UNIT_MOVEMENT_RANGE = {
+    UnitType.SWORDSMAN: 2,
+    UnitType.CROSSBOWMAN: 3,
+    UnitType.CAVALRY: 4,
+}
+
+# Visibilité
+FOG_RADIUS = 2
 
 # Bonus de combat selon terrain
 TERRAIN_DEFENSE_BONUS = {

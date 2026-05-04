@@ -28,9 +28,9 @@ class UI:
             (46, 204, 113)
         )
         
-        # Boutons de recrutement
-        recruit_y = 500
-        button_small_width = 250
+        # Boutons d'action
+        recruit_y = WINDOW_HEIGHT - 350
+        button_small_width = UI_WIDTH - 50
         button_small_height = 40
         spacing = 10
 
@@ -39,7 +39,7 @@ class UI:
             recruit_y,
             button_small_width,
             button_small_height,
-            f"⚔ Spadassin ({UNIT_COSTS[UnitType.SWORDSMAN]} or)",
+            f"Spadassin ({UNIT_COSTS[UnitType.SWORDSMAN]} or)",
             (41, 128, 185),
             (52, 152, 219)
         )
@@ -49,7 +49,7 @@ class UI:
             recruit_y + button_small_height + spacing,
             button_small_width,
             button_small_height,
-            f"🏹 Arbalétrier ({UNIT_COSTS[UnitType.CROSSBOWMAN]} or)",
+            f"Arbalétrier ({UNIT_COSTS[UnitType.CROSSBOWMAN]} or)",
             (142, 68, 173),
             (155, 89, 182)
         )
@@ -59,7 +59,7 @@ class UI:
             recruit_y + (button_small_height + spacing) * 2,
             button_small_width,
             button_small_height,
-            f"🐴 Cavalerie ({UNIT_COSTS[UnitType.CAVALRY]} or)",
+            f"Cavalerie ({UNIT_COSTS[UnitType.CAVALRY]} or)",
             (230, 126, 34),
             (243, 156, 18)
         )
@@ -70,18 +70,29 @@ class UI:
             recruit_y + (button_small_height + spacing) * 3,
             button_small_width,
             button_small_height,
-            f"🏘 Construire ville (150 or)",
+            f"Construire ville (150 or)",
             (39, 174, 96),
             (46, 204, 113)
+        )
+
+        # Bouton construction pont
+        self.btn_build_bridge = Button(
+            self.panel_x + 25,
+            recruit_y + (button_small_height + spacing) * 4,
+            button_small_width,
+            button_small_height,
+            f"Construire pont ({BRIDGE_COST} or)",
+            (127, 101, 65),
+            (148, 122, 86)
         )
 
         # Bouton déplacement
         self.btn_move_army = Button(
             self.panel_x + 25,
-            recruit_y + (button_small_height + spacing) * 4,
+            recruit_y + (button_small_height + spacing) * 5,
             button_small_width,
             button_small_height,
-            f"➡️ Déplacer armée",
+            "Deplacer armee",
             (52, 73, 94),
             (71, 94, 121)
         )
@@ -97,6 +108,16 @@ class UI:
 
         y_offset = 20
 
+        # Top bar stratégique
+        bar_height = 36
+        pygame.draw.rect(self.screen, (28, 30, 35), (0, 0, GRID_COLS * CELL_SIZE, bar_height))
+        top_text = self.font_small.render(
+            f"Tour {game.turn_number} | {COUNTRY_NAMES[game.current_player_country]} | Or {game.players[game.current_player_country].gold} | Revenus {game.last_income} | Entretien {game.last_upkeep}",
+            True,
+            (220, 220, 220),
+        )
+        self.screen.blit(top_text, (10, 10))
+
         # Titre
         title = self.font_title.render("The World Is Ours", True, UI_TITLE_COLOR)
         self.screen.blit(title, (self.panel_x + 20, y_offset))
@@ -106,6 +127,15 @@ class UI:
         turn_text = self.font_small.render(f"Tour: {game.turn_number}", True, (150, 150, 150))
         self.screen.blit(turn_text, (self.panel_x + 20, y_offset))
         y_offset += 40
+
+        if game.winner_country:
+            winner_text = self.font_normal.render(
+                f"Victoire: {COUNTRY_NAMES[game.winner_country]}",
+                True,
+                (255, 215, 0),
+            )
+            self.screen.blit(winner_text, (self.panel_x + 20, y_offset))
+            y_offset += 40
 
         # Pays actuellement joué
         current_country = game.current_player_country
@@ -179,15 +209,35 @@ class UI:
                 self.screen.blit(text, (self.panel_x + 30, y_offset))
                 y_offset += 22
 
+                move_range = UNIT_MOVEMENT_RANGE.get(cell.army.unit_type, MOVEMENT_RANGE)
+                move_text = self.font_small.render(
+                    f"Portee: {move_range} | PM restant: {cell.army.movement_left}",
+                    True,
+                    UI_TEXT_COLOR,
+                )
+                self.screen.blit(move_text, (self.panel_x + 30, y_offset))
+                y_offset += 22
+                status = "Deja deplacee" if cell.army.movement_left <= 0 else "Prete"
+                status_text = self.font_small.render(f"Etat: {status}", True, UI_TEXT_COLOR)
+                self.screen.blit(status_text, (self.panel_x + 30, y_offset))
+                y_offset += 22
+
             y_offset += 20
 
         # Stats globales
+        recruit_y = WINDOW_HEIGHT - 350
+        max_content_y = recruit_y - 120
+
         self.draw_section_title("Statistiques", y_offset)
         y_offset += 30
 
         # Compte les territoires par pays
         territories = self.count_territories(game)
         for country, count in territories.items():
+            if y_offset > max_content_y:
+                more = self.font_small.render("...", True, (150, 150, 150))
+                self.screen.blit(more, (self.panel_x + 30, y_offset))
+                break
             if country != Country.NONE and count > 0:
                 pygame.draw.circle(self.screen, COUNTRY_COLORS[country], 
                                  (self.panel_x + 30, y_offset + 8), 6)
@@ -195,21 +245,43 @@ class UI:
                 self.screen.blit(text, (self.panel_x + 45, y_offset))
                 y_offset += 20
 
+        # Event panel
+        y_offset += 10
+        self.draw_section_title("Evenements", y_offset)
+        y_offset += 30
+        for msg in game.event_log[-4:]:
+            clipped = msg[:42]
+            line = self.font_small.render(clipped, True, (190, 190, 190))
+            self.screen.blit(line, (self.panel_x + 24, y_offset))
+            y_offset += 18
+
         # Section recrutement
-        recruit_y = WINDOW_HEIGHT - 260
         self.draw_section_title("Recrutement", recruit_y)
         recruit_y += 35
 
         # Affiche les boutons seulement si une case du joueur est sélectionnée
-        if game.selected_cell and game.selected_cell.country == current_country:
-            self.btn_recruit_swordsman.draw(self.screen, self.font_small)
-            self.btn_recruit_crossbowman.draw(self.screen, self.font_small)
-            self.btn_recruit_cavalry.draw(self.screen, self.font_small)
-            self.btn_build_city.draw(self.screen, self.font_small)
-            
-            # Bouton déplacement seulement si armée présente
-            if game.selected_cell.army:
+        if game.selected_cell:
+            can_recruit = game.selected_cell.country == current_country
+            can_move = game.selected_cell.army and game.selected_cell.army.country == current_country
+
+            if can_recruit:
+                self.btn_recruit_swordsman.draw(self.screen, self.font_small)
+                self.btn_recruit_crossbowman.draw(self.screen, self.font_small)
+                self.btn_recruit_cavalry.draw(self.screen, self.font_small)
+                self.btn_build_city.draw(self.screen, self.font_small)
+                self.btn_build_bridge.draw(self.screen, self.font_small)
+                if game.bridge_mode:
+                    bridge_msg = self.font_small.render("Mode pont actif: clique eau", True, (230, 200, 140))
+                    self.screen.blit(bridge_msg, (self.panel_x + 28, recruit_y + 246))
+            else:
+                msg = self.font_small.render("Recrutement: case non alliee", True, (150, 150, 150))
+                self.screen.blit(msg, (self.panel_x + 28, recruit_y + 22))
+
+            if can_move:
                 self.btn_move_army.draw(self.screen, self.font_small)
+                if game.selected_cell.army.movement_left <= 0:
+                    moved_msg = self.font_small.render("Cette armee a deja bouge", True, (220, 120, 120))
+                    self.screen.blit(moved_msg, (self.panel_x + 30, recruit_y + 240))
         else:
             # Message si pas de case sélectionnée
             msg = self.font_small.render("Sélectionnez une", True, (150, 150, 150))
@@ -220,25 +292,32 @@ class UI:
         # Bouton fin de tour
         self.btn_end_turn.draw(self.screen, self.font_normal)
     
-    def handle_event(self, event):
+    def handle_event(self, event, game):
         """Gère les événements UI"""
         if self.btn_end_turn.handle_event(event):
             return "end_turn"
-        
+
+        selected_cell = game.selected_cell
+        current_country = game.current_player_country
+        can_recruit = selected_cell and selected_cell.country == current_country
+        can_move = selected_cell and selected_cell.army and selected_cell.army.country == current_country
+
         # Construction ville
-        if self.btn_build_city.handle_event(event):
+        if can_recruit and self.btn_build_city.handle_event(event):
             return "build_city"
+        if can_recruit and self.btn_build_bridge.handle_event(event):
+            return "build_bridge"
         
         # Déplacement
-        if self.btn_move_army.handle_event(event):
+        if can_move and self.btn_move_army.handle_event(event):
             return "move_army"
 
         # Recrutement
-        if self.btn_recruit_swordsman.handle_event(event):
+        if can_recruit and self.btn_recruit_swordsman.handle_event(event):
             return ("recruit", UnitType.SWORDSMAN)
-        if self.btn_recruit_crossbowman.handle_event(event):
+        if can_recruit and self.btn_recruit_crossbowman.handle_event(event):
             return ("recruit", UnitType.CROSSBOWMAN)
-        if self.btn_recruit_cavalry.handle_event(event):
+        if can_recruit and self.btn_recruit_cavalry.handle_event(event):
             return ("recruit", UnitType.CAVALRY)
         
         return None
