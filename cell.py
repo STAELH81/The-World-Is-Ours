@@ -13,8 +13,11 @@ class Cell:
         self.army = None
         self.bridge_hp = 0
         self.discovered_by = set()
+        self.capital_owner = Country.NONE
+        self.city_owner = Country.NONE
+        self.last_recruit_turn = -1
         
-    def draw(self, surface, assets=None):
+    def draw(self, surface, assets=None, show_units=True):
         screen_x = self.x * CELL_SIZE
         screen_y = self.y * CELL_SIZE
         
@@ -73,7 +76,7 @@ class Cell:
             return
         
         # Affiche l'armée si présente
-        if self.army:
+        if show_units and self.army:
             self.draw_army(surface, screen_x, screen_y, assets)
     
     def draw_army(self, surface, screen_x, screen_y, assets=None):

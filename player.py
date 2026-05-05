@@ -6,6 +6,13 @@ class Player:
         self.country = country
         self.gold = 500  # Or de départ
         self.is_ai = False  # Pour différencier joueur humain et IA
+        self.unlocked_techs = []
+        self.city_income_bonus = 0
+        self.bridge_hp_bonus = 0
+        self.bridge_cost_reduction = 0
+        self.ranged_range_bonus = 0
+        self.ranged_damage_bonus = 0
+        self.upkeep_reduction = 0
     
     def add_gold(self, amount):
         self.gold += amount
@@ -31,7 +38,8 @@ class Player:
                 if cell.army and cell.army.country == self.country:
                     total_units += cell.army.count
 
-        return total_units * UNIT_UPKEEP
+        upkeep_per_unit = max(1, UNIT_UPKEEP - self.upkeep_reduction)
+        return total_units * upkeep_per_unit
     
     def count_cities(self, grid):
         """Compte le nombre de villes possédées"""
@@ -57,3 +65,31 @@ class Player:
         """Calcule le nombre maximum de villes autorisées"""
         territory = self.count_territory(grid)
         return territory // CITY_TERRITORY_REQUIREMENT
+
+    def get_next_tech(self):
+        if len(self.unlocked_techs) >= len(TECH_TREE):
+            return None
+        return TECH_TREE[len(self.unlocked_techs)]
+
+    def can_research_next(self):
+        tech = self.get_next_tech()
+        return tech is not None and self.gold >= tech["cost"]
+
+    def research_next(self):
+        tech = self.get_next_tech()
+        if tech is None or self.gold < tech["cost"]:
+            return None
+        self.gold -= tech["cost"]
+        self.unlocked_techs.append(tech["id"])
+
+        if tech["id"] == "economy":
+            self.city_income_bonus += 30
+        elif tech["id"] == "engineering":
+            self.bridge_hp_bonus += 1
+            self.bridge_cost_reduction += 20
+        elif tech["id"] == "ballistics":
+            self.ranged_range_bonus += 1
+            self.ranged_damage_bonus += 1
+        elif tech["id"] == "logistics":
+            self.upkeep_reduction += 1
+        return tech

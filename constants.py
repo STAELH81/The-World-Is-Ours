@@ -99,6 +99,7 @@ UNIT_COSTS = {
     UnitType.CROSSBOWMAN: 55,
     UnitType.CAVALRY: 70,
 }
+MAX_UNITS_PER_ARMY = 16
 
 # Coût d'entretien par tour
 UNIT_UPKEEP = 5 
@@ -112,7 +113,7 @@ BRIDGE_COST = 90
 # Stats de combat (pour plus tard)
 UNIT_STATS = {
     UnitType.SWORDSMAN: {"attack": 3, "defense": 4},
-    UnitType.CROSSBOWMAN: {"attack": 5, "defense": 2},
+    UnitType.CROSSBOWMAN: {"attack": 3, "defense": 2},
     UnitType.CAVALRY: {"attack": 4, "defense": 3},
 }
 
@@ -123,6 +124,18 @@ UNIT_MOVEMENT_RANGE = {
     UnitType.CROSSBOWMAN: 3,
     UnitType.CAVALRY: 4,
 }
+UNIT_RANGED_RANGE = {
+    UnitType.CROSSBOWMAN: 2,
+}
+RANGED_BASE_DAMAGE = 4
+FORTIFY_DEFENSE_BONUS = 1
+
+TECH_TREE = [
+    {"id": "economy", "name": "Agriculture", "cost": 250},
+    {"id": "engineering", "name": "Ingenierie", "cost": 280},
+    {"id": "ballistics", "name": "Balistique", "cost": 320},
+    {"id": "logistics", "name": "Logistique", "cost": 360},
+]
 
 # Visibilité
 FOG_RADIUS = 2
@@ -134,4 +147,5 @@ TERRAIN_DEFENSE_BONUS = {
     TerrainType.FOREST: 1,    # +1 défense en forêt
     TerrainType.WATER: 0,
     TerrainType.BEACH: 0,
+    TerrainType.BRIDGE: 0,
 }

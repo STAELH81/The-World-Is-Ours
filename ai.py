@@ -5,12 +5,29 @@ from army import Army
 class AI:
     def __init__(self, game):
         self.game = game
+
+    def is_target_allowed(self, attacker_country, target_country):
+        """Soft truce in solo: AI avoids hard focus on RED early game."""
+        if target_country == Country.NONE:
+            return False
+        if (
+            self.game.game_mode == "solo"
+            and attacker_country != Country.RED
+            and target_country == Country.RED
+            and self.game.turn_number <= 3
+        ):
+            return False
+        return True
     
     def play_turn(self, country):
         """Joue le tour pour un pays IA"""
         print(f"\n[AI] {COUNTRY_NAMES[country]} réfléchit...")
         
         player = self.game.players[country]
+        if player.can_research_next() and player.gold >= player.get_next_tech()["cost"] + 120:
+            tech = player.research_next()
+            if tech:
+                self.game.log_event(f"[TECH] {COUNTRY_NAMES[country]} debloque {tech['name']}")
         
         # 1. Construction de ville si possible
         self.try_build_city(country, player)
@@ -43,20 +60,10 @@ class AI:
                     not cell.is_capital and 
                     not cell.is_city and
                     cell.terrain not in [TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE]):
-                    has_support = False
-                    for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-                        nx, ny = x + dx, y + dy
-                        if 0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS:
-                            n = self.game.grid[nx][ny]
-                            if n.country == country and (n.is_city or n.is_capital):
-                                has_support = True
-                                break
-                    if not has_support:
-                        continue
-                    
                     # Construit
                     player.spend_gold(CITY_COST)
                     cell.is_city = True
+                    cell.city_owner = country
                     print(f"  [CITY] Ville construite en ({x}, {y})")
                     return
     
@@ -79,7 +86,9 @@ class AI:
         # Recrute tant qu'il y a de l'or
         recruited = 0
         min_unit_cost = min(UNIT_COSTS.values())
-        while player.gold >= min_unit_cost and recruited < 3:  # Max 3 unités par tour
+        while player.gold >= min_unit_cost and recruited < 1:  # Max 1 recrutement par centre urbain / tour
+            if capital_cell.last_recruit_turn == self.game.turn_number:
+                break
             # If a capital army already exists, keep stacking that type.
             # This avoids replacing an existing army with another type.
             if capital_cell.army:
@@ -93,9 +102,12 @@ class AI:
             player.spend_gold(UNIT_COSTS[unit_type])
             
             if capital_cell.army:
+                if capital_cell.army.count >= MAX_UNITS_PER_ARMY:
+                    break
                 capital_cell.army.count += 1
             else:
                 capital_cell.army = Army(country, unit_type, 1)
+            capital_cell.last_recruit_turn = self.game.turn_number
             
             recruited += 1
         
@@ -123,6 +135,12 @@ class AI:
             step_guard = 0
             while army_cell.army and army_cell.army.movement_left > 0 and step_guard < 3:
                 step_guard += 1
+                if army_cell.army.unit_type == UnitType.CROSSBOWMAN:
+                    ranged_targets = self.game.get_ranged_targets(army_cell)
+                    if ranged_targets:
+                        tx, ty = random.choice(list(ranged_targets))
+                        self.game.ranged_attack(army_cell, self.game.grid[tx][ty])
+                        continue
                 enemy = self.find_nearby_enemy(army_cell, country)
                 if enemy:
                     self.game.move_army(army_cell, enemy)
@@ -137,6 +155,8 @@ class AI:
         """Trouve un ennemi à portée d'attaque."""
         best_target = None
         best_distance = 999
+        fallback_red_target = None
+        fallback_red_distance = 999
         movement_range = from_cell.army.movement_left
         
         for x in range(GRID_COLS):
@@ -148,6 +168,11 @@ class AI:
                     distance = abs(from_cell.x - x) + abs(from_cell.y - y)
                     
                     if distance <= movement_range and distance < best_distance:
+                        if not self.is_target_allowed(country, cell.country):
+                            if distance < fallback_red_distance:
+                                fallback_red_target = cell
+                                fallback_red_distance = distance
+                            continue
                         # Priorité : attaquer les armées
                         if cell.army:
                             best_target = cell
@@ -156,22 +181,31 @@ class AI:
                             best_target = cell
                             best_distance = distance
         
-        return best_target
+        return best_target if best_target else fallback_red_target
     
     def find_move_target(self, from_cell, country):
         """Trouve une case où se déplacer (vers ennemi le plus proche)"""
         # Cherche la case ennemie la plus proche
         closest_enemy = None
         closest_distance = 999
+        fallback_enemy = None
+        fallback_distance = 999
         
         for x in range(GRID_COLS):
             for y in range(GRID_ROWS):
                 cell = self.game.grid[x][y]
                 if cell.country != Country.NONE and cell.country != country:
                     distance = abs(from_cell.x - x) + abs(from_cell.y - y)
-                    if distance < closest_distance:
+                    if self.is_target_allowed(country, cell.country) and distance < closest_distance:
                         closest_enemy = cell
                         closest_distance = distance
+                    elif distance < fallback_distance:
+                        fallback_enemy = cell
+                        fallback_distance = distance
+
+        if not closest_enemy:
+            closest_enemy = fallback_enemy
+            closest_distance = fallback_distance
         
         if not closest_enemy:
             return None
