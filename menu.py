@@ -1,5 +1,6 @@
 import pygame
 from constants import *
+from settings import load_settings, save_settings, cycle_value, DIFFICULTY_CONFIG
 
 class Button:
     def __init__(self, x, y, width, height, text, color, hover_color):
@@ -75,11 +76,17 @@ class Menu:
             button_x, start_y + 160, button_width, button_height,
             "Retour", (127, 140, 141), (149, 165, 166)
         )
-    
+        self.btn_difficulty = Button(
+            button_x, start_y + 240, button_width, 44,
+            "", (90, 110, 150), (105, 130, 170)
+        )
+        self.settings = load_settings()
+
     def handle_event(self, event):
         if self.state == "main":
             if self.btn_new_game.handle_event(event):
                 self.state = "mode_select"
+                self.settings = load_settings()
                 return None
             
             if self.btn_load_game.handle_event(event):
@@ -89,6 +96,14 @@ class Menu:
                 return "quit"
         
         elif self.state == "mode_select":
+            if self.btn_difficulty.handle_event(event):
+                self.settings["difficulty"] = cycle_value(
+                    self.settings.get("difficulty", "normal"),
+                    list(DIFFICULTY_CONFIG.keys()),
+                )
+                self.settings = save_settings(self.settings)
+                return None
+
             if self.btn_solo.handle_event(event):
                 return "start_solo"
             
@@ -126,6 +141,10 @@ class Menu:
             self.btn_quit.draw(self.screen, self.font_button)
         
         elif self.state == "mode_select":
+            labels = {"easy": "Facile", "normal": "Normal", "hard": "Difficile"}
+            diff = self.settings.get("difficulty", "normal")
+            self.btn_difficulty.text = f"Difficulte: {labels.get(diff, diff)}"
+            self.btn_difficulty.draw(self.screen, self.font_button)
             self.btn_solo.draw(self.screen, self.font_button)
             self.btn_godgame.draw(self.screen, self.font_button)
             self.btn_back.draw(self.screen, self.font_button)

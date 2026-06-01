@@ -146,8 +146,19 @@ class UI:
         # Top bar stratégique
         bar_height = 36
         pygame.draw.rect(self.screen, (28, 30, 35), (0, 0, GRID_COLS * CELL_SIZE, bar_height))
+        ui_country = game.get_ui_country()
+        active = game.current_player_country
+        if game.game_mode == "solo" and active != ui_country:
+            turn_label = f"{COUNTRY_NAMES[active]} (IA)"
+        else:
+            turn_label = COUNTRY_NAMES[active]
+        top_suffix = ""
+        if game.ai_turn_pending:
+            top_suffix = " | IA..."
+        elif game.pause_menu.open:
+            top_suffix = " | Pause"
         top_text = self.font_small.render(
-            f"Tour {game.turn_number} | {COUNTRY_NAMES[game.current_player_country]} | Or {game.players[game.current_player_country].gold} | Revenus {game.last_income} | Entretien {game.last_upkeep}",
+            f"Tour {game.turn_number} | {turn_label} | Ton or {game.players[ui_country].gold} | Rev. {game.last_income} | Ent. {game.last_upkeep}{top_suffix}",
             True,
             (220, 220, 220),
         )
@@ -163,30 +174,40 @@ class UI:
         self.screen.blit(turn_text, (self.panel_x + 20, y_offset))
         y_offset += 40
 
-        if game.winner_country:
-            winner_text = self.font_normal.render(
-                f"Victoire: {COUNTRY_NAMES[game.winner_country]}",
-                True,
-                (255, 215, 0),
-            )
+        if game.is_game_over():
+            if game.player_defeated:
+                end_text = game.game_over_message or "Defaite"
+            else:
+                end_text = f"Victoire: {COUNTRY_NAMES[game.winner_country]}"
+            winner_text = self.font_normal.render(end_text, True, (255, 215, 0))
             self.screen.blit(winner_text, (self.panel_x + 20, y_offset))
             y_offset += 40
 
-        # Pays actuellement joué
-        current_country = game.current_player_country
-        player = game.players[current_country]
-        self.draw_section_title("Pays actuel", y_offset)
-        y_offset += 30
+        ui_country = game.get_ui_country()
+        active_country = game.current_player_country
+        player = game.players[ui_country]
 
-        # Nom et couleur du pays
-        country_name = COUNTRY_NAMES[current_country]
-        pygame.draw.circle(self.screen, COUNTRY_COLORS[current_country], 
+        if game.game_mode == "solo" and active_country != ui_country:
+            self.draw_section_title("Tour en cours", y_offset)
+            y_offset += 30
+            ia_line = self.font_normal.render(
+                f"{COUNTRY_NAMES[active_country]} (IA)", True, UI_TEXT_COLOR
+            )
+            self.screen.blit(ia_line, (self.panel_x + 30, y_offset))
+            y_offset += 35
+            self.draw_section_title("Ton royaume", y_offset)
+            y_offset += 30
+        else:
+            self.draw_section_title("Pays actuel", y_offset)
+            y_offset += 30
+
+        country_name = COUNTRY_NAMES[ui_country]
+        pygame.draw.circle(self.screen, COUNTRY_COLORS[ui_country],
                           (self.panel_x + 30, y_offset + 10), 8)
         text = self.font_normal.render(country_name, True, UI_TEXT_COLOR)
         self.screen.blit(text, (self.panel_x + 50, y_offset))
         y_offset += 35
 
-        # Or
         gold = player.gold
         text = self.font_normal.render(f"Or: {gold}", True, (255, 215, 0))
         self.screen.blit(text, (self.panel_x + 30, y_offset))
@@ -277,23 +298,31 @@ class UI:
 
         # Affiche les boutons selon contexte de la case sélectionnée
         if self.current_tab == "actions" and game.selected_cell:
+            human_turn = game.is_human_turn()
             can_recruit = (
-                game.selected_cell.country == current_country
+                human_turn
+                and game.selected_cell.country == ui_country
                 and (game.selected_cell.is_city or game.selected_cell.is_capital)
                 and game.selected_cell.terrain not in (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
             )
             can_build_city = (
-                game.selected_cell.country == current_country
+                human_turn
+                and game.selected_cell.country == ui_country
                 and not game.selected_cell.is_city
                 and not game.selected_cell.is_capital
                 and game.selected_cell.terrain not in (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
                 and not game.selected_cell.army
             )
             can_build_bridge = (
-                game.selected_cell.country == current_country
+                human_turn
+                and game.selected_cell.country == ui_country
                 and game.selected_cell.terrain != TerrainType.WATER
             )
-            can_move = game.selected_cell.army and game.selected_cell.army.country == current_country
+            can_move = (
+                human_turn
+                and game.selected_cell.army
+                and game.selected_cell.army.country == ui_country
+            )
 
             if can_recruit:
                 self.btn_recruit_swordsman.draw(self.screen, self.font_small)
@@ -343,7 +372,7 @@ class UI:
                 self.screen.blit(text, (self.panel_x + 45, y))
                 y += 20
             y += 10
-            player = game.players[current_country]
+            player = game.players[game.get_ui_country()]
             tech_title = self.font_small.render("Techs:", True, (190, 210, 230))
             self.screen.blit(tech_title, (self.panel_x + 24, y))
             y += 20
@@ -360,7 +389,7 @@ class UI:
 
         # Bouton fin de tour
         self.btn_research.draw(self.screen, self.font_small)
-        next_tech = game.players[current_country].get_next_tech()
+        next_tech = game.players[game.get_ui_country()].get_next_tech()
         if next_tech:
             line = self.font_small.render(
                 f"Tech: {next_tech['name']} ({next_tech['cost']} or)",
@@ -390,10 +419,11 @@ class UI:
             return None
 
         selected_cell = game.selected_cell
-        current_country = game.current_player_country
+        current_country = game.get_ui_country()
         can_recruit = (
             selected_cell
             and selected_cell.country == current_country
+            and game.is_human_turn()
             and (selected_cell.is_city or selected_cell.is_capital)
             and selected_cell.terrain not in (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
         )

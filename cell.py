@@ -36,6 +36,9 @@ class Cell:
                 surface.blit(selection_overlay, (screen_x, screen_y))
         else:
             pygame.draw.rect(surface, color, (screen_x, screen_y, CELL_SIZE, CELL_SIZE))
+            shade = tuple(max(0, c - 28) for c in color)
+            pygame.draw.rect(surface, shade, (screen_x, screen_y + CELL_SIZE // 2, CELL_SIZE, CELL_SIZE // 2))
+            pygame.draw.rect(surface, (20, 20, 20), (screen_x, screen_y, CELL_SIZE, CELL_SIZE), 1)
         
         if self.country != Country.NONE:
             border_overlay = assets.overlays.get(self.country) if assets else None
@@ -46,7 +49,7 @@ class Cell:
                 pygame.draw.rect(surface, border_color, 
                                (screen_x, screen_y, CELL_SIZE, CELL_SIZE), 3)
         
-        # Capitale
+        # Capitale / ville (l'armée est dessinée par-dessus)
         if self.is_capital:
             center_x = screen_x + CELL_SIZE // 2
             center_y = screen_y + CELL_SIZE // 2
@@ -57,10 +60,7 @@ class Cell:
             else:
                 pygame.draw.circle(surface, COUNTRY_COLORS[self.country], (center_x, center_y), 10)
                 pygame.draw.circle(surface, (0, 0, 0), (center_x, center_y), 7)
-            return
-        
-        # Ville
-        if self.is_city:
+        elif self.is_city:
             center_x = screen_x + CELL_SIZE // 2
             center_y = screen_y + CELL_SIZE // 2
             city_sprite = assets.buildings.get("city") if assets else None
@@ -68,14 +68,11 @@ class Cell:
                 sprite_rect = city_sprite.get_rect(center=(center_x, center_y))
                 surface.blit(city_sprite, sprite_rect)
             else:
-                # Carré pour la ville
-                pygame.draw.rect(surface, COUNTRY_COLORS[self.country], 
+                pygame.draw.rect(surface, COUNTRY_COLORS[self.country],
                                 (center_x - 8, center_y - 8, 16, 16))
-                pygame.draw.rect(surface, (0, 0, 0), 
+                pygame.draw.rect(surface, (0, 0, 0),
                                 (center_x - 6, center_y - 6, 12, 12))
-            return
-        
-        # Affiche l'armée si présente
+
         if show_units and self.army:
             self.draw_army(surface, screen_x, screen_y, assets)
     

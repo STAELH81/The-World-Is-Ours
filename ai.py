@@ -2,236 +2,302 @@ import random
 from constants import *
 from army import Army
 
+
 class AI:
     def __init__(self, game):
         self.game = game
 
     def is_target_allowed(self, attacker_country, target_country):
-        """Soft truce in solo: AI avoids hard focus on RED early game."""
         if target_country == Country.NONE:
             return False
+        truce_turns = self.game.difficulty_cfg.get("ai_truce_turns", 3)
         if (
             self.game.game_mode == "solo"
             and attacker_country != Country.RED
             and target_country == Country.RED
-            and self.game.turn_number <= 3
+            and self.game.turn_number <= truce_turns
         ):
             return False
         return True
-    
+
     def play_turn(self, country):
-        """Joue le tour pour un pays IA"""
-        print(f"\n[AI] {COUNTRY_NAMES[country]} réfléchit...")
-        
+        print(f"\n[AI] {COUNTRY_NAMES[country]} reflechit...")
         player = self.game.players[country]
-        if player.can_research_next() and player.gold >= player.get_next_tech()["cost"] + 120:
-            tech = player.research_next()
-            if tech:
-                self.game.log_event(f"[TECH] {COUNTRY_NAMES[country]} debloque {tech['name']}")
-        
-        # 1. Construction de ville si possible
-        self.try_build_city(country, player)
-        
-        # 2. Recrutement d'unités
-        self.recruit_units(country, player)
-        
-        # 3. Déplacement et attaque des armées
-        self.move_armies(country)
-        
+
+        self._try_research(country, player)
+        self._try_build_city(country, player)
+        self._recruit_units(country, player)
+        self._move_armies(country)
+
         print(f"[AI] {COUNTRY_NAMES[country]} termine son tour")
-    
-    def try_build_city(self, country, player):
-        """Tente de construire une ville"""
-        if player.gold < CITY_COST:
+
+    def _try_research(self, country, player):
+        tech = player.get_next_tech()
+        if tech and player.gold >= tech["cost"] + 80:
+            result = player.research_next()
+            if result:
+                self.game.log_event(f"[TECH] {COUNTRY_NAMES[country]} debloque {result['name']}")
+
+    def _try_build_city(self, country, player):
+        if player.gold < CITY_COST + 60:
             return
-        
-        current_cities = player.count_cities(self.game.grid)
-        max_cities = player.max_cities_allowed(self.game.grid)
-        
-        if current_cities >= max_cities:
+        if player.count_cities(self.game.grid) >= player.max_cities_allowed(self.game.grid):
             return
-        
-        # Trouve une case valide pour construire
+
+        candidates = []
         for x in range(GRID_COLS):
             for y in range(GRID_ROWS):
                 cell = self.game.grid[x][y]
-                
-                if (cell.country == country and 
-                    not cell.is_capital and 
-                    not cell.is_city and
-                    cell.terrain not in [TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE]):
-                    # Construit
-                    player.spend_gold(CITY_COST)
-                    cell.is_city = True
-                    cell.city_owner = country
-                    print(f"  [CITY] Ville construite en ({x}, {y})")
-                    return
-    
-    def recruit_units(self, country, player):
-        """Recrute des unités sur la capitale"""
-        # Trouve la capitale
-        capital_cell = None
+                if not self._is_valid_city_site(cell, country):
+                    continue
+                score = 0
+                if cell.is_capital:
+                    score += 5
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS:
+                        n = self.game.grid[nx][ny]
+                        if n.country != country and n.country != Country.NONE:
+                            score += 2
+                candidates.append((score, cell))
+
+        if not candidates:
+            return
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        cell = candidates[0][1]
+        player.spend_gold(CITY_COST)
+        cell.is_city = True
+        cell.city_owner = country
+        self.game.audio.play("build")
+
+    def _recruit_units(self, country, player):
+        urban_cells = []
         for x in range(GRID_COLS):
             for y in range(GRID_ROWS):
                 cell = self.game.grid[x][y]
-                if cell.is_capital and cell.country == country:
-                    capital_cell = cell
-                    break
-            if capital_cell:
-                break
-        
-        if not capital_cell:
-            return
-        
-        # Recrute tant qu'il y a de l'or
+                if (
+                    (cell.is_capital or cell.is_city)
+                    and cell.country == country
+                    and cell.terrain not in (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
+                ):
+                    urban_cells.append(cell)
+
+        def urban_priority(cell):
+            score = 10 if cell.is_capital else 0
+            if cell.army and cell.army.count < MAX_UNITS_PER_ARMY:
+                score += 5
+            return score
+
+        urban_cells.sort(key=urban_priority, reverse=True)
         recruited = 0
         min_unit_cost = min(UNIT_COSTS.values())
-        while player.gold >= min_unit_cost and recruited < 1:  # Max 1 recrutement par centre urbain / tour
-            if capital_cell.last_recruit_turn == self.game.turn_number:
+
+        recruit_limit = self.game.difficulty_cfg.get("ai_recruit_limit", 2)
+        for capital_cell in urban_cells:
+            if recruited >= recruit_limit or player.gold < min_unit_cost + 40:
                 break
-            # If a capital army already exists, keep stacking that type.
-            # This avoids replacing an existing army with another type.
+            if capital_cell.last_recruit_turn == self.game.turn_number:
+                continue
+
+            unit_type = self._pick_recruit_type(player, capital_cell, country)
+            if unit_type is None:
+                continue
+
+            cost = UNIT_COSTS[unit_type]
+            if player.gold < cost:
+                continue
+            player.spend_gold(cost)
+
             if capital_cell.army:
-                unit_type = capital_cell.army.unit_type
-            else:
-                affordable_types = [u for u in UNIT_COSTS if player.gold >= UNIT_COSTS[u]]
-                if not affordable_types:
-                    break
-                unit_type = random.choice(affordable_types)
-            
-            player.spend_gold(UNIT_COSTS[unit_type])
-            
-            if capital_cell.army:
-                if capital_cell.army.count >= MAX_UNITS_PER_ARMY:
-                    break
                 capital_cell.army.count += 1
             else:
                 capital_cell.army = Army(country, unit_type, 1)
             capital_cell.last_recruit_turn = self.game.turn_number
-            
             recruited += 1
-        
-        if recruited > 0:
-            print(f"  [ARMY] {recruited} unité(s) recrutée(s)")
-    
-    def move_armies(self, country):
-        """Déplace et attaque avec les armées"""
-        # Liste toutes les armées du pays
+
+    def _pick_recruit_type(self, player, cell, country):
+        if cell.army:
+            if cell.army.count >= MAX_UNITS_PER_ARMY:
+                return None
+            return cell.army.unit_type
+
+        if player.gold >= UNIT_COSTS[UnitType.CAVALRY]:
+            return UnitType.CAVALRY
+        if player.gold >= UNIT_COSTS[UnitType.CROSSBOWMAN]:
+            return UnitType.CROSSBOWMAN
+        if player.gold >= UNIT_COSTS[UnitType.SWORDSMAN]:
+            return UnitType.SWORDSMAN
+        return None
+
+    def _move_armies(self, country):
         armies = []
         for x in range(GRID_COLS):
             for y in range(GRID_ROWS):
                 cell = self.game.grid[x][y]
                 if cell.army and cell.army.country == country:
                     armies.append(cell)
-        
-        # Mélange pour varier les mouvements
-        random.shuffle(armies)
-        
+
+        armies.sort(key=lambda c: self._army_priority(c, country), reverse=True)
+
         for army_cell in armies:
-            # Vérifie si l'armée existe toujours (peut avoir été détruite en combat)
             if not army_cell.army:
                 continue
-
             step_guard = 0
-            while army_cell.army and army_cell.army.movement_left > 0 and step_guard < 3:
+            while army_cell.army and army_cell.army.movement_left > 0 and step_guard < 4:
                 step_guard += 1
                 if army_cell.army.unit_type == UnitType.CROSSBOWMAN:
-                    ranged_targets = self.game.get_ranged_targets(army_cell)
-                    if ranged_targets:
-                        tx, ty = random.choice(list(ranged_targets))
-                        self.game.ranged_attack(army_cell, self.game.grid[tx][ty])
-                        continue
-                enemy = self.find_nearby_enemy(army_cell, country)
-                if enemy:
-                    self.game.move_army(army_cell, enemy)
-                else:
-                    target = self.find_move_target(army_cell, country)
+                    target = self._best_ranged_target(army_cell, country)
                     if target:
-                        self.game.move_army(army_cell, target)
-                    else:
-                        break
-    
-    def find_nearby_enemy(self, from_cell, country):
-        """Trouve un ennemi à portée d'attaque."""
-        best_target = None
-        best_distance = 999
-        fallback_red_target = None
-        fallback_red_distance = 999
-        movement_range = from_cell.army.movement_left
-        
-        for x in range(GRID_COLS):
-            for y in range(GRID_ROWS):
-                cell = self.game.grid[x][y]
-                
-                # Case ennemie avec armée OU case ennemie sans armée
-                if cell.country != Country.NONE and cell.country != country:
-                    distance = abs(from_cell.x - x) + abs(from_cell.y - y)
-                    
-                    if distance <= movement_range and distance < best_distance:
-                        if not self.is_target_allowed(country, cell.country):
-                            if distance < fallback_red_distance:
-                                fallback_red_target = cell
-                                fallback_red_distance = distance
-                            continue
-                        # Priorité : attaquer les armées
-                        if cell.army:
-                            best_target = cell
-                            best_distance = distance
-                        elif not best_target:  # Sinon conquérir terrain vide
-                            best_target = cell
-                            best_distance = distance
-        
-        return best_target if best_target else fallback_red_target
-    
-    def find_move_target(self, from_cell, country):
-        """Trouve une case où se déplacer (vers ennemi le plus proche)"""
-        # Cherche la case ennemie la plus proche
-        closest_enemy = None
-        closest_distance = 999
-        fallback_enemy = None
-        fallback_distance = 999
-        
-        for x in range(GRID_COLS):
-            for y in range(GRID_ROWS):
-                cell = self.game.grid[x][y]
-                if cell.country != Country.NONE and cell.country != country:
-                    distance = abs(from_cell.x - x) + abs(from_cell.y - y)
-                    if self.is_target_allowed(country, cell.country) and distance < closest_distance:
-                        closest_enemy = cell
-                        closest_distance = distance
-                    elif distance < fallback_distance:
-                        fallback_enemy = cell
-                        fallback_distance = distance
+                        self.game.ranged_attack(army_cell, target)
+                        continue
 
-        if not closest_enemy:
-            closest_enemy = fallback_enemy
-            closest_distance = fallback_distance
-        
-        if not closest_enemy:
-            return None
-        
-        movement_range = from_cell.army.movement_left
-
-        # Trouve la meilleure case pour se rapprocher
-        best_move = None
-        best_distance = closest_distance
-        
-        for x in range(GRID_COLS):
-            for y in range(GRID_ROWS):
-                distance_from_army = abs(from_cell.x - x) + abs(from_cell.y - y)
-                if distance_from_army == 0 or distance_from_army > movement_range:
+                recapture = self._best_recapture_target(army_cell, country)
+                if recapture:
+                    self.game.move_army(army_cell, recapture)
                     continue
 
+                enemy = self._best_attack_target(army_cell, country)
+                if enemy:
+                    self.game.move_army(army_cell, enemy)
+                    continue
+
+                move_to = self._best_move_toward_objective(army_cell, country)
+                if move_to:
+                    self.game.move_army(army_cell, move_to)
+                else:
+                    break
+
+    def _army_priority(self, army_cell, country):
+        score = 0
+        cap = self._nearest_enemy_capital(army_cell, country)
+        if cap:
+            dist = abs(army_cell.x - cap.x) + abs(army_cell.y - cap.y)
+            score += max(0, 40 - dist)
+        if army_cell.army.unit_type == UnitType.CAVALRY:
+            score += 3
+        return score
+
+    def _nearest_enemy_capital(self, from_cell, country):
+        best = None
+        best_dist = 999
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = self.game.grid[x][y]
+                if not cell.is_capital:
+                    continue
+                if cell.country == country or cell.country == Country.NONE:
+                    continue
+                if not self.is_target_allowed(country, cell.country):
+                    continue
+                dist = abs(from_cell.x - x) + abs(from_cell.y - y)
+                if dist < best_dist:
+                    best_dist = dist
+                    best = cell
+        return best
+
+    def _target_score(self, from_cell, target, country, distance):
+        score = 100 - distance * 8
+        if target.is_capital and target.country != country:
+            score += 80
+        if target.is_city and target.country != country:
+            score += 35
+        if target.army and target.army.country != country:
+            score += 45
+        if not self.is_target_allowed(country, target.country):
+            score -= 200
+        return score
+
+    def _best_recapture_target(self, from_cell, country):
+        """Priorite: reprendre capitale/villes du royaume occupees par l'ennemi."""
+        best = None
+        best_distance = 999
+        movement_range = from_cell.army.movement_left
+
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = self.game.grid[x][y]
+                own_urban = (
+                    (cell.is_capital and cell.capital_owner == country)
+                    or (cell.is_city and cell.city_owner == country)
+                )
+                if not own_urban or cell.country == country:
+                    continue
+                path = self.game.find_path(from_cell, cell, movement_range, from_cell.army)
+                if not path:
+                    continue
+                distance = len(path)
+                if distance < best_distance:
+                    best_distance = distance
+                    best = cell
+        return best
+
+    def _best_attack_target(self, from_cell, country):
+        best = None
+        best_score = -9999
+        movement_range = from_cell.army.movement_left
+
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = self.game.grid[x][y]
+                if cell.country == country or cell.country == Country.NONE:
+                    continue
+                path = self.game.find_path(from_cell, cell, movement_range, from_cell.army)
+                if not path:
+                    continue
+                score = self._target_score(from_cell, cell, country, len(path))
+                if score > best_score:
+                    best_score = score
+                    best = cell
+        return best
+
+    def _best_ranged_target(self, from_cell, country):
+        targets = self.game.get_ranged_targets(from_cell)
+        if not targets:
+            return None
+        best = None
+        best_score = -9999
+        for tx, ty in targets:
+            cell = self.game.grid[tx][ty]
+            dist = abs(from_cell.x - tx) + abs(from_cell.y - ty)
+            score = self._target_score(from_cell, cell, country, dist)
+            if score > best_score:
+                best_score = score
+                best = cell
+        return best
+
+    def _best_move_toward_objective(self, from_cell, country):
+        objective = self._nearest_enemy_capital(from_cell, country)
+        if not objective:
+            return None
+
+        movement_range = from_cell.army.movement_left
+        best_move = None
+        best_dist = abs(from_cell.x - objective.x) + abs(from_cell.y - objective.y)
+
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                if abs(from_cell.x - x) + abs(from_cell.y - y) > movement_range:
+                    continue
                 target_cell = self.game.grid[x][y]
                 if target_cell.terrain == TerrainType.WATER:
+                    continue
+                path = self.game.find_path(from_cell, target_cell, movement_range, from_cell.army)
+                if not path:
                     continue
                 if target_cell.army and target_cell.army.country == country:
                     if target_cell.army.unit_type != from_cell.army.unit_type:
                         continue
-
-                distance_to_enemy = abs(x - closest_enemy.x) + abs(y - closest_enemy.y)
-                if distance_to_enemy < best_distance:
+                dist = abs(x - objective.x) + abs(y - objective.y)
+                if dist < best_dist:
+                    best_dist = dist
                     best_move = target_cell
-                    best_distance = distance_to_enemy
-        
         return best_move
+
+    def _is_valid_city_site(self, cell, country):
+        return (
+            cell.country == country
+            and not cell.is_capital
+            and not cell.is_city
+            and not cell.army
+            and cell.terrain not in (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
+        )
