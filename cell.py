@@ -47,14 +47,10 @@ class Cell:
 
         tile = pygame.Rect(screen_x, screen_y, CELL_SIZE, CELL_SIZE)
         if self.country != Country.NONE:
-            overlay = getattr(assets, "overlays", {}).get(self.country) if assets else None
-            if overlay:
-                surface.blit(overlay, (screen_x, screen_y))
-            else:
-                wash = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                wash.fill((*COUNTRY_COLORS[self.country], 40))
-                surface.blit(wash, (screen_x, screen_y))
-                self._draw_political_borders(surface, screen_x, screen_y, grid)
+            wash = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+            wash.fill((*COUNTRY_COLORS[self.country], 28))
+            surface.blit(wash, (screen_x, screen_y))
+            self._draw_political_borders(surface, screen_x, screen_y, grid)
 
         if self.terrain == TerrainType.WATER and grid is not None:
             self._draw_coast_foam(surface, screen_x, screen_y, grid)
@@ -81,29 +77,62 @@ class Cell:
             return None
         return grid[nx][ny]
 
+    def territory_edge_kind(self, neighbor):
+        """same = interior, outer = blob outline, frontier = other kingdom."""
+        if neighbor is None:
+            return "outer"
+        if neighbor.country == self.country:
+            return "same"
+        if neighbor.country != Country.NONE:
+            return "frontier"
+        return "outer"
+
+    def political_edges(self, grid):
+        return {
+            "n": self.territory_edge_kind(self._neighbor(grid, 0, -1)),
+            "s": self.territory_edge_kind(self._neighbor(grid, 0, 1)),
+            "w": self.territory_edge_kind(self._neighbor(grid, -1, 0)),
+            "e": self.territory_edge_kind(self._neighbor(grid, 1, 0)),
+        }
+
+    def _edge_rect(self, name, thickness, inset=0):
+        s = CELL_SIZE
+        if name == "n":
+            return pygame.Rect(inset, inset, s - 2 * inset, thickness)
+        if name == "s":
+            return pygame.Rect(inset, s - thickness - inset, s - 2 * inset, thickness)
+        if name == "w":
+            return pygame.Rect(inset, inset, thickness, s - 2 * inset)
+        return pygame.Rect(s - thickness - inset, inset, thickness, s - 2 * inset)
+
     def _draw_political_borders(self, surface, screen_x, screen_y, grid):
+        """One outline around the whole kingdom; no walls between same-color tiles."""
         color = COUNTRY_COLORS[self.country]
-        edges = (
-            (0, -1, (screen_x, screen_y), (screen_x + CELL_SIZE - 1, screen_y)),
-            (0, 1, (screen_x, screen_y + CELL_SIZE - 1), (screen_x + CELL_SIZE - 1, screen_y + CELL_SIZE - 1)),
-            (-1, 0, (screen_x, screen_y), (screen_x, screen_y + CELL_SIZE - 1)),
-            (1, 0, (screen_x + CELL_SIZE - 1, screen_y), (screen_x + CELL_SIZE - 1, screen_y + CELL_SIZE - 1)),
-        )
-        for dx, dy, start, end in edges:
-            neighbor = self._neighbor(grid, dx, dy)
-            other = Country.NONE if neighbor is None else neighbor.country
-            if other != self.country:
-                pygame.draw.line(surface, color, start, end, 3)
+        layer = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+        kinds = self.political_edges(grid)
+
+        for name, kind in kinds.items():
+            if kind == "same":
+                continue
+            if kind == "frontier":
+                pygame.draw.rect(layer, (*color, 42), self._edge_rect(name, 1))
+                continue
+            pygame.draw.rect(layer, (*color, 70), self._edge_rect(name, 6))
+            pygame.draw.rect(layer, (18, 12, 8, 200), self._edge_rect(name, 2))
+            pygame.draw.rect(layer, (*color, 230), self._edge_rect(name, 2, inset=1))
+
+        surface.blit(layer, (screen_x, screen_y))
 
     def _draw_coast_foam(self, surface, screen_x, screen_y, grid):
-        foam = (168, 196, 204)
+        foam = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
         edges = (
-            (0, -1, (screen_x + 2, screen_y + 2), (screen_x + CELL_SIZE - 3, screen_y + 2)),
-            (0, 1, (screen_x + 2, screen_y + CELL_SIZE - 3), (screen_x + CELL_SIZE - 3, screen_y + CELL_SIZE - 3)),
-            (-1, 0, (screen_x + 2, screen_y + 2), (screen_x + 2, screen_y + CELL_SIZE - 3)),
-            (1, 0, (screen_x + CELL_SIZE - 3, screen_y + 2), (screen_x + CELL_SIZE - 3, screen_y + CELL_SIZE - 3)),
+            (0, -1, "n"),
+            (0, 1, "s"),
+            (-1, 0, "w"),
+            (1, 0, "e"),
         )
-        for dx, dy, start, end in edges:
+        for dx, dy, name in edges:
             neighbor = self._neighbor(grid, dx, dy)
             if neighbor and neighbor.terrain in SHORE_TERRAINS:
-                pygame.draw.line(surface, foam, start, end, 2)
+                pygame.draw.rect(foam, (200, 220, 224, 90), self._edge_rect(name, 2, inset=1))
+        surface.blit(foam, (screen_x, screen_y))

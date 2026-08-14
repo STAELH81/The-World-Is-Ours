@@ -41,6 +41,27 @@ class TileRenderTests(unittest.TestCase):
         px, py = cell_screen_pos(1, 0)
         self.assertNotEqual(surf.get_at((px + 4, py + 4))[:3], (0, 0, 0))
 
+    def test_same_country_tiles_share_one_outer_border(self):
+        grid = [[Cell(x, y) for y in range(GRID_ROWS)] for x in range(GRID_COLS)]
+        for x in range(2, 5):
+            for y in range(2, 5):
+                grid[x][y].terrain = TerrainType.PLAIN
+                grid[x][y].country = Country.RED
+        grid[5][3].terrain = TerrainType.PLAIN
+        grid[5][3].country = Country.BLUE
+        inside = grid[3][3]
+        edges = inside.political_edges(grid)
+        self.assertEqual(edges["n"], "same")
+        self.assertEqual(edges["s"], "same")
+        self.assertEqual(edges["w"], "same")
+        self.assertEqual(edges["e"], "same")
+        west = grid[2][3]
+        self.assertEqual(west.political_edges(grid)["w"], "outer")
+        self.assertEqual(west.political_edges(grid)["e"], "same")
+        east = grid[4][3]
+        self.assertEqual(east.political_edges(grid)["e"], "frontier")
+        self.assertEqual(east.territory_edge_kind(None), "outer")
+
 
 if __name__ == "__main__":
     unittest.main()

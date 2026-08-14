@@ -1623,7 +1623,12 @@ class Game:
                         if (x, y) not in self.visibility:
                             continue
                         glow = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                        glow.fill((212, 168, 78, pulse_a))
+                        pygame.draw.rect(
+                            glow,
+                            (212, 168, 78, pulse_a),
+                            glow.get_rect().inflate(-8, -8),
+                            2,
+                        )
                         self.screen.blit(glow, cell_screen_pos(x, y))
 
             def blit_highlight(cells, color):
