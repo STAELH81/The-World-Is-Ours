@@ -210,6 +210,7 @@ def _apply_payload(game, payload):
     game.bridge_targets = set()
     game.ranged_mode = False
     game.preview_path_cells = []
+    game.move_costs = {}
     game.occupation_tracker = {}
     game.ai_turn_pending = False
     game.ai_turn_resume_at = 0

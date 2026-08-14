@@ -12,7 +12,7 @@ TUTORIAL_STEPS = [
     ),
     (
         "Tes unités",
-        "Clique une armée, puis une case verte pour avancer ou une case rouge pour attaquer.",
+        "Clique une armée. Survole une case verte : le fantôme montre où elle s'arrête.",
     ),
     (
         "La boucle du tour",

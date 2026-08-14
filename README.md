@@ -27,7 +27,7 @@ Quand un royaume n’a plus d’armées ni de villes/capitales sur son territoir
 |--------|---------|
 | Unité suivante | **N** / **Tab**, ou le bouton bas-droite tant qu’il reste du mouvement |
 | Sélectionner une armée | Clic gauche : la portée s’affiche tout de suite |
-| Déplacer | Clic sur une case **verte** |
+| Déplacer | Survole une case **verte** : le fantôme et « Arrêt » montrent où l’armée s’arrête. Clique pour y aller. |
 | Attaquer | Clic sur une case **rouge** |
 | Tir à distance | Clic sur une case **violette** (arbalétrier) |
 | Embarquer | Clic sur une case d’eau **bleue** |

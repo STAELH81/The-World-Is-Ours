@@ -76,6 +76,7 @@ def make_stub_game():
     game.bridge_targets = set()
     game.ranged_mode = False
     game.preview_path_cells = []
+    game.move_costs = {}
     game.audio = MagicMock()
     game.fx = DummyFx()
     game.last_income = 0
@@ -337,6 +338,21 @@ class NavalAndTraitTests(unittest.TestCase):
         self.assertTrue(attacker.army.has_moved)
         self.assertEqual(attacker.army.count, 3)
         self.assertEqual(defender.army.count, 2)
+
+    def test_move_costs_show_where_movement_ends(self):
+        game = make_stub_game()
+        start = game.grid[8][8]
+        start.country = Country.RED
+        start.terrain = TerrainType.PLAIN
+        start.army = Army(Country.RED, UnitType.CAVALRY, 1)
+        start.army.refresh_movement(game.players[Country.RED])
+        moves, _attacks = game.get_reachable_cells(start)
+        far = (8 + UNIT_MOVEMENT_RANGE[UnitType.CAVALRY], 8)
+        too_far = (far[0] + 1, 8)
+        self.assertIn(far, moves)
+        self.assertEqual(game.move_costs[far], UNIT_MOVEMENT_RANGE[UnitType.CAVALRY])
+        self.assertNotIn(too_far, moves)
+        self.assertNotIn(too_far, game.move_costs)
 
 
 if __name__ == "__main__":

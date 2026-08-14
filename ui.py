@@ -100,7 +100,7 @@ class UI:
             if cell.army.embarked:
                 info["hint"] = f"{name} en mer. Clique une plage ou une terre pour débarquer."
             else:
-                info["hint"] = f"{name}. Cases vertes : avancer. Rouges : attaquer."
+                info["hint"] = f"{name}. Survole une case verte : tu vois où l'armée s'arrête."
         elif info["can_recruit"]:
             info["hint"] = "Cette ville peut produire une unité ce tour."
         elif info["already_recruited"]:

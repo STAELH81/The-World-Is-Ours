@@ -3,7 +3,7 @@ import pygame
 import sys
 from collections import deque
 from constants import *
-from cell import Cell
+from cell import Cell, draw_army_at
 from ui import UI
 from menu import Menu
 from army import Army
@@ -74,6 +74,7 @@ class Game:
         self.game_over_message = ""
         self.player_defeated = False
         self.preview_path_cells = []
+        self.move_costs = {}
         self.occupation_tracker = {}
         self.ai_turn_pending = False
         self.ai_turn_resume_at = 0
@@ -111,6 +112,7 @@ class Game:
         self.game_over_message = ""
         self.player_defeated = False
         self.preview_path_cells = []
+        self.move_costs = {}
         self.occupation_tracker = {}
         self.ai_turn_pending = False
         self.ai_turn_resume_at = 0
@@ -644,6 +646,7 @@ class Game:
         self.bridge_targets.clear()
         self.ranged_mode = False
         self.preview_path_cells.clear()
+        self.move_costs = {}
 
     def select_army_for_orders(self, cell):
         self.selected_army_cell = cell
@@ -833,15 +836,21 @@ class Game:
         """Retourne les cibles atteignables et attaquables depuis une armée."""
         move_targets = set()
         attack_targets = set()
+        costs = {}
         if not from_cell or not from_cell.army:
+            self.move_costs = costs
             return move_targets, attack_targets
         if from_cell.army.has_moved:
+            self.move_costs = costs
             return move_targets, attack_targets
 
         max_range = from_cell.army.movement_left
         engaged_targets = self.get_adjacent_enemy_cells(from_cell, self.current_player_country)
         if engaged_targets:
             attack_targets |= engaged_targets
+            for pos in engaged_targets:
+                costs[pos] = 1
+            self.move_costs = costs
             return move_targets, attack_targets
 
         for x in range(GRID_COLS):
@@ -852,11 +861,12 @@ class Game:
                 path_cells = self.find_path(from_cell, target, max_range, from_cell.army)
                 if not path_cells:
                     continue
-
+                costs[(x, y)] = len(path_cells)
                 if target.army and target.army.country != self.current_player_country:
                     attack_targets.add((x, y))
                 else:
                     move_targets.add((x, y))
+        self.move_costs = costs
         return move_targets, attack_targets
 
     def check_victory(self):
@@ -1612,18 +1622,13 @@ class Game:
                     highlight.fill(color)
                     self.screen.blit(highlight, cell_screen_pos(hx, hy))
 
-            blit_highlight(self.move_targets, (40, 90, 48, 95))
-            blit_highlight(self.attack_targets, (160, 40, 32, 105))
+            blit_highlight(self.move_targets, (36, 92, 48, 55))
+            blit_highlight(self.attack_targets, (160, 40, 32, 90))
             blit_highlight(self.bridge_targets, (180, 140, 60, 110))
             blit_highlight(self.ranged_targets, (120, 60, 150, 110))
             blit_highlight(self.embark_targets, (36, 90, 140, 110))
             blit_highlight(self.disembark_targets, (40, 120, 70, 110))
-            for cell in self.preview_path_cells:
-                if (cell.x, cell.y) not in self.visibility:
-                    continue
-                preview = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                preview.fill((255, 245, 120, 85))
-                self.screen.blit(preview, cell_screen_pos(cell.x, cell.y))
+            self.draw_movement_preview()
 
             for x in range(GRID_COLS):
                 for y in range(GRID_ROWS):
@@ -1714,6 +1719,22 @@ class Game:
             lines.append(f"Mouvement {army.movement_left}/{army.movement_range(self.players.get(army.country))}")
             stats = UNIT_STATS[army.unit_type]
             lines.append(f"Att {stats['attack']}  Déf {stats['defense']}")
+        dest = (cell.x, cell.y)
+        if self.selected_army_cell and self.selected_army_cell.army:
+            army = self.selected_army_cell.army
+            cost = getattr(self, "move_costs", {}).get(dest)
+            if dest in self.move_targets and cost is not None:
+                left = max(0, army.movement_left - cost)
+                if left <= 0:
+                    lines.append(f"L'armée s'arrête ici ({cost} cases)")
+                else:
+                    lines.append(f"{cost} cases. Encore {left} de mouvement après")
+            elif dest in self.attack_targets:
+                lines.append("Attaque : l'armée avance jusqu'ici")
+            elif dest in self.embark_targets:
+                lines.append("Embarquement : l'armée s'arrête sur l'eau")
+            elif dest in self.disembark_targets:
+                lines.append("Débarquement : l'armée s'arrête à terre")
 
         from theme import INK, PARCHMENT, GOLD, WOOD_DARK, load_font, draw_bevel_rect, wrap_text
 
@@ -1737,6 +1758,74 @@ class Game:
         pygame.draw.rect(self.screen, GOLD, rect, 1)
         for idx, line in enumerate(wrapped):
             self.screen.blit(font.render(line, True, INK), (tx + 10, ty + 7 + idx * 18))
+
+    def draw_movement_preview(self):
+        """Chemin, limite de portée et fantôme d'arrivée."""
+        from theme import CREAM, GOLD, GOLD_BRIGHT, INK, load_font
+
+        army_cell = self.selected_army_cell
+        if not army_cell or not army_cell.army or not self.is_human_turn():
+            return
+        army = army_cell.army
+        max_range = army.movement_left
+        costs = getattr(self, "move_costs", {})
+
+        for (hx, hy), cost in costs.items():
+            if (hx, hy) not in self.move_targets:
+                continue
+            if (hx, hy) not in self.visibility:
+                continue
+            if cost != max_range:
+                continue
+            rect = pygame.Rect(*cell_screen_pos(hx, hy), CELL_SIZE, CELL_SIZE)
+            pygame.draw.rect(self.screen, GOLD, rect.inflate(-3, -3), 2)
+
+        path = self.preview_path_cells or []
+        if not path:
+            return
+        for cell in path[:-1]:
+            if (cell.x, cell.y) not in self.visibility:
+                continue
+            cx, cy = cell_screen_pos(cell.x, cell.y)
+            pygame.draw.circle(
+                self.screen,
+                CREAM,
+                (cx + CELL_SIZE // 2, cy + CELL_SIZE // 2),
+                5,
+            )
+            pygame.draw.circle(
+                self.screen,
+                INK,
+                (cx + CELL_SIZE // 2, cy + CELL_SIZE // 2),
+                5,
+                1,
+            )
+
+        dest = path[-1]
+        if (dest.x, dest.y) not in self.visibility:
+            return
+        dx, dy = cell_screen_pos(dest.x, dest.y)
+        dest_rect = pygame.Rect(dx, dy, CELL_SIZE, CELL_SIZE)
+        pygame.draw.rect(self.screen, GOLD_BRIGHT, dest_rect.inflate(-1, -1), 3)
+        pygame.draw.rect(self.screen, INK, dest_rect.inflate(-4, -4), 1)
+
+        ghost = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+        draw_army_at(ghost, 0, 0, army, self.assets)
+        ghost.set_alpha(155)
+        self.screen.blit(ghost, (dx, dy))
+
+        cost = costs.get((dest.x, dest.y), len(path))
+        left = max(0, max_range - cost)
+        font = load_font(14, bold=True)
+        label = "Arrêt" if left <= 0 else f"reste {left}"
+        text = font.render(label, True, INK)
+        pad = pygame.Rect(0, 0, text.get_width() + 8, text.get_height() + 4)
+        pad.midbottom = (dx + CELL_SIZE // 2, dy - 2)
+        if pad.top < HUD_TOP:
+            pad.midtop = (dx + CELL_SIZE // 2, dy + CELL_SIZE + 2)
+        pygame.draw.rect(self.screen, GOLD_BRIGHT, pad)
+        pygame.draw.rect(self.screen, INK, pad, 1)
+        self.screen.blit(text, text.get_rect(center=pad.center))
 
 
 if __name__ == "__main__":
