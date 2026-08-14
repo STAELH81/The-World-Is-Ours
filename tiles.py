@@ -45,11 +45,15 @@ def _make_terrain(terrain, variant):
         _tree(surf, 17, 24, 7)
         _tree(surf, 28, 26, 5)
     elif terrain == TerrainType.MOUNTAIN:
+        s = CELL_SIZE
         _dither(surf, (128, 108, 78), (148, 128, 96), variant)
-        pygame.draw.polygon(surf, (96, 82, 62), [(2, 34), (14, 8), (26, 34)])
-        pygame.draw.polygon(surf, (168, 148, 112), [(10, 34), (22, 4), (34, 34)])
-        pygame.draw.polygon(surf, PARCHMENT, [(22, 8), (26, 16), (18, 16)])
-        pygame.draw.polygon(surf, (220, 214, 196), [(14, 12), (16, 18), (11, 18)])
+        pygame.draw.polygon(surf, (96, 82, 62), [(2, s - 2), (s // 3, 8), (s - 10, s - 2)])
+        pygame.draw.polygon(surf, (168, 148, 112), [(8, s - 2), (s * 2 // 3, 4), (s - 2, s - 2)])
+        pygame.draw.polygon(
+            surf,
+            PARCHMENT,
+            [(s * 2 // 3, 8), (s * 2 // 3 + 5, 18), (s * 2 // 3 - 6, 18)],
+        )
     elif terrain == TerrainType.WATER:
         deep = (28, 68, 112) if variant % 2 == 0 else (24, 62, 104)
         foam = (92, 148, 176)
@@ -123,12 +127,7 @@ def _ship(surf, cx, cy):
 def _make_unit(unit_type, country, embarked):
     surf = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
     color = COUNTRY_COLORS[country]
-    box = pygame.Rect(5, 6, CELL_SIZE - 10, CELL_SIZE - 11)
-    pygame.draw.rect(surf, (36, 24, 14), box)
-    inner = box.inflate(-3, -3)
-    pygame.draw.rect(surf, color, inner)
-    pygame.draw.rect(surf, GOLD, inner, 1)
-    cx, cy = inner.centerx, inner.centery + 2
+    cx, cy = CELL_SIZE // 2, CELL_SIZE // 2 + 2
     if embarked:
         _ship(surf, cx, cy)
     else:
@@ -147,26 +146,31 @@ def unit_surface(army):
 
 def draw_army_badge(surface, screen_x, screen_y, army, assets=None):
     sprite = assets.units.get(army.unit_type) if assets else None
+    cx = screen_x + CELL_SIZE // 2
+    cy = screen_y + CELL_SIZE // 2 + 1
     if sprite and not army.embarked:
-        box = pygame.Rect(screen_x + 5, screen_y + 6, CELL_SIZE - 10, CELL_SIZE - 11)
-        pygame.draw.rect(surface, COUNTRY_COLORS[army.country], box)
-        pygame.draw.rect(surface, GOLD, box, 1)
-        surface.blit(sprite, sprite.get_rect(center=box.center))
+        surface.blit(sprite, sprite.get_rect(center=(cx, cy)))
     else:
         surface.blit(unit_surface(army), (screen_x, screen_y))
-    letter = UNIT_LETTERS.get(army.unit_type, "?")
-    font = load_font(14, bold=True)
-    blit_outlined(surface, font, letter, CREAM, INK, (screen_x + 7, screen_y + 5))
-    count = f"~{army.count}" if army.embarked else str(army.count)
+    count = str(army.count)
     count_font = load_font(13, bold=True)
-    label = count_font.render(count, True, CREAM)
-    shadow = count_font.render(count, True, INK)
-    pos = (screen_x + CELL_SIZE - 4 - label.get_width(), screen_y + CELL_SIZE - 16)
-    surface.blit(shadow, (pos[0] + 1, pos[1] + 1))
-    surface.blit(label, pos)
+    blit_outlined(
+        surface,
+        count_font,
+        count,
+        CREAM,
+        INK,
+        (screen_x + CELL_SIZE - 4 - count_font.size(count)[0], screen_y + CELL_SIZE - 16),
+    )
 
 
-def draw_city(surface, cell, screen_x, screen_y, compact=False):
+def draw_city(surface, cell, screen_x, screen_y, compact=False, assets=None):
+    key = "capital" if cell.is_capital else "city"
+    sprite = assets.buildings.get(key) if assets else None
+    if sprite:
+        cy = screen_y + CELL_SIZE // 2 - (4 if compact else 0)
+        surface.blit(sprite, sprite.get_rect(center=(screen_x + CELL_SIZE // 2, cy)))
+        return
     color = COUNTRY_COLORS.get(cell.country, (120, 90, 50))
     cx = screen_x + CELL_SIZE // 2
     base_y = screen_y + CELL_SIZE - (10 if compact else 7)

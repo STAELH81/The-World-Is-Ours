@@ -37,7 +37,7 @@ class AI:
         if tech and player.gold >= tech["cost"] + 80:
             result = player.research_next()
             if result:
-                self.game.log_event(f"[TECH] {COUNTRY_NAMES[country]} debloque {result['name']}")
+                self.game.log_event(f"{COUNTRY_NAMES[country]} débloque {result['name']}")
 
     def _try_build_city(self, country, player):
         if player.gold < CITY_COST + 60:

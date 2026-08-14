@@ -27,14 +27,14 @@ Quand un royaume n’a plus d’armées ni de villes/capitales sur son territoir
 |--------|---------|
 | Unité suivante | **N** / **Tab**, ou le bouton bas-droite tant qu’il reste du mouvement |
 | Sélectionner une armée | Clic gauche : la portée s’affiche tout de suite |
-| Déplacer | Clic sur une case **+** |
-| Attaquer | Clic sur une case **X** |
-| Tir à distance | Clic sur une case **\*** (arbalétrier) |
-| Embarquer | Clic sur une case d’eau **~** — pas une plage |
-| Débarquer | Clic sur une terre ou une plage **↓** |
-| Pont | Case **=** (détroit seulement) |
+| Déplacer | Clic sur une case **verte** |
+| Attaquer | Clic sur une case **rouge** |
+| Tir à distance | Clic sur une case **violette** (arbalétrier) |
+| Embarquer | Clic sur une case d’eau **bleue** |
+| Débarquer | Clic sur une terre ou une plage **verte** |
+| Pont | Case **dorée** (détroit seulement) |
 | Annuler l’ordre | Clic droit ou **Échap** |
-| Recruter | Clique une ville : S spadassin, A arbalète, C cavalerie |
+| Recruter | Clique une ville, puis Spadassin / Arbalète / Cavalerie |
 | Construire | Case libre : fonder une ville |
 | Fortifier | Bouton dans le panneau du bas |
 | Recherche tech | Bouton en haut à droite |
@@ -45,7 +45,7 @@ Quand un royaume n’a plus d’armées ni de villes/capitales sur son territoir
 
 En **solo**, le brouillard reste toujours celui du **Royaume Rouge** (pas la vision des tours IA).
 
-L’interface vise un look *Civilization* précoce : bois, or, parchemin. La carte est plein écran. Les unités portent une lettre (**S / A / C**) plus un effectif. Chaque royaume a un **motif** (hachures), pas seulement une couleur.
+L’interface vise un look *Civilization* précoce : bois, or, parchemin. La fenêtre est en **paysage** (1280x776) pour un moniteur normal. Tes PNG dans `assets/` (villes, unités, terrain) remplacent le dessin par défaut.
 
 ## Mer
 
@@ -77,14 +77,14 @@ La partie est enregistrée automatiquement à chaque fin de tour dans `saves/lat
 
 ## Assets (optionnel)
 
-Place des PNG dans `assets/` pour remplacer le rendu par défaut :
+Place tes PNG dans `assets/` : le jeu les charge tout seul (plusieurs noms de fichiers marchent, ex. `city.png`, `ville.png`, `capital.png`).
 
-- `assets/terrain/` — plain, forest, mountain, water, beach, bridge
-- `assets/overlay/` — bordures par couleur
+- `assets/terrain/` — plaine, forêt, montagne, eau, plage, pont
 - `assets/units/` — spadassin, arbalétrier, cavalerie
-- `assets/buildings/` — capitale, ville
+- `assets/buildings/` — **capitale**, **ville**
+- `assets/overlay/` — bordures de royaume (optionnel)
 
-Sans fichiers, le jeu utilise des formes et couleurs générées.
+Sans fichier, le jeu dessine le terrain à la main.
 
 ## Structure du projet
 

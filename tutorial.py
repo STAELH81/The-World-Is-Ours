@@ -12,19 +12,15 @@ TUTORIAL_STEPS = [
     ),
     (
         "Tes unités",
-        "S spadassin, A arbalète, C cavalerie. Clique une unité, puis une case + pour avancer.",
+        "Clique une armée, puis une case verte pour avancer ou une case rouge pour attaquer.",
     ),
     (
         "La boucle du tour",
-        "N : unité suivante. Quand plus aucune n'a de mouvement, Fin de tour clignote. Espace force la fin.",
+        "N passe à l'unité suivante. Quand plus personne n'a de mouvement, Fin de tour clignote. Espace termine le tour.",
     ),
     (
         "Villes",
-        "Clique une ville pour produire une unité. Une seule production par ville et par tour.",
-    ),
-    (
-        "Lire la carte",
-        "Chaque royaume a un motif (pas seulement une couleur). + marcher, X attaquer, ~ mer, * tir.",
+        "Clique une ville pour produire. Une seule unité par ville et par tour.",
     ),
 ]
 
@@ -66,7 +62,7 @@ class Tutorial:
         overlay.fill((40, 24, 12, 170))
         surface.blit(overlay, (0, 0))
         panel_w = min(620, WINDOW_WIDTH - 40)
-        panel_h = 250
+        panel_h = 220
         panel_x = (WINDOW_WIDTH - panel_w) // 2
         panel_y = WINDOW_HEIGHT // 2 - panel_h // 2
         rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
@@ -84,7 +80,7 @@ class Tutorial:
             surface.blit(line_surf, line_surf.get_rect(center=(WINDOW_WIDTH // 2, text_y)))
             text_y += 26
         hint = hint_font.render(
-            f"{self.step + 1}/{len(TUTORIAL_STEPS)}  —  Clic ou Entrée",
+            f"{self.step + 1}/{len(TUTORIAL_STEPS)}   Clic ou Entrée",
             True,
             INK_SOFT,
         )

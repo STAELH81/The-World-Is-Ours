@@ -1,10 +1,10 @@
 from enum import Enum
 
-GRID_COLS = 20
-GRID_ROWS = 30
-CELL_SIZE = 36
+GRID_COLS = 32
+GRID_ROWS = 18
+CELL_SIZE = 40
 
-HUD_TOP = 70
+HUD_TOP = 56
 MAP_ORIGIN_X = 0
 MAP_ORIGIN_Y = HUD_TOP
 MAP_PIXEL_WIDTH = GRID_COLS * CELL_SIZE
@@ -77,7 +77,7 @@ COUNTRY_HATCH = {
 }
 
 COUNTRY_SHORT = {
-    Country.NONE: "—",
+    Country.NONE: "",
     Country.RED: "Rouge",
     Country.BLUE: "Bleu",
     Country.GREEN: "Vert",

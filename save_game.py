@@ -7,7 +7,7 @@ from cell import Cell
 from army import Army
 from player import Player
 
-SAVE_VERSION = 2
+SAVE_VERSION = 3
 SAVE_DIR = "saves"
 SAVE_PATH = os.path.join(SAVE_DIR, "latest.json")
 

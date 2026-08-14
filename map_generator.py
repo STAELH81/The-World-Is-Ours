@@ -13,8 +13,8 @@ PLAYABLE_COUNTRIES = [
 
 ISLAND_BASE_SIZE = 50
 ISLAND_SIZE_VARIANCE = 3
-MIN_CENTER_DISTANCE = 8
-MIN_ISLAND_SIZE = 44
+MIN_CENTER_DISTANCE = 7
+MIN_ISLAND_SIZE = 40
 MAX_ISLAND_SIZE = 56
 
 
@@ -27,14 +27,26 @@ class MapGenerator:
         self._clear_grid(game)
         centers = []
         islands = []
+        claimed = set()
 
-        for country in PLAYABLE_COUNTRIES:
-            center = self._pick_island_center(centers)
+        slots = [
+            (6, 5),
+            (16, 4),
+            (25, 5),
+            (10, 13),
+            (22, 13),
+        ]
+        for country, (sx, sy) in zip(PLAYABLE_COUNTRIES, slots):
+            center = (
+                max(3, min(GRID_COLS - 4, sx + self.rng.randint(-1, 1))),
+                max(3, min(GRID_ROWS - 4, sy + self.rng.randint(-1, 1))),
+            )
             centers.append(center)
             target_size = ISLAND_BASE_SIZE + self.rng.randint(
                 -ISLAND_SIZE_VARIANCE, ISLAND_SIZE_VARIANCE
             )
-            land = self._grow_island(game, center, target_size)
+            land = self._grow_island(game, center, target_size, forbidden=claimed)
+            claimed |= land
             islands.append(land)
             game.apply_country(list(land), country)
 
@@ -77,10 +89,18 @@ class MapGenerator:
             self.rng.randint(3, GRID_ROWS - 4),
         )
 
-    def _grow_island(self, game, center, target_size):
+    def _grow_island(self, game, center, target_size, forbidden=None):
         cx, cy = center
+        blocked = set(forbidden or ())
         land = {(cx, cy)}
-        frontier = [(cx, cy)]
+        if (cx, cy) in blocked:
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (2, 0), (0, 2)):
+                nx, ny = cx + dx, cy + dy
+                if 1 <= nx < GRID_COLS - 1 and 1 <= ny < GRID_ROWS - 1 and (nx, ny) not in blocked:
+                    land = {(nx, ny)}
+                    break
+        frontier = list(land)
+        blocked |= land
 
         while len(land) < target_size and frontier:
             fx, fy = self.rng.choice(frontier)
@@ -89,7 +109,7 @@ class MapGenerator:
                 nx, ny = fx + dx, fy + dy
                 if not (1 <= nx < GRID_COLS - 1 and 1 <= ny < GRID_ROWS - 1):
                     continue
-                if (nx, ny) in land:
+                if (nx, ny) in land or (nx, ny) in blocked:
                     continue
                 neighbors.append((nx, ny))
 
@@ -99,9 +119,12 @@ class MapGenerator:
 
             pick = self.rng.choice(neighbors)
             land.add(pick)
+            blocked.add(pick)
             frontier.append(pick)
             game.grid[pick[0]][pick[1]].terrain = TerrainType.PLAIN
 
+        for x, y in land:
+            game.grid[x][y].terrain = TerrainType.PLAIN
         return land
 
     def _balance_island_sizes(self, game, islands):

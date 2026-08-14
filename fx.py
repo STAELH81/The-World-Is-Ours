@@ -156,7 +156,7 @@ def draw_end_recap(screen, game):
     ranked = sorted(territories.items(), key=lambda item: item[1], reverse=True)
     if ranked:
         bits = [f"{COUNTRY_NAMES[c]} {n}" for c, n in ranked[:5]]
-        lines.append("Territoire : " + " · ".join(bits))
+        lines.append("Territoire : " + ", ".join(bits))
     looted = getattr(game, "gold_looted", {})
     if looted:
         best = max(looted.items(), key=lambda item: item[1])

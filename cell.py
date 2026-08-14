@@ -1,12 +1,11 @@
 import pygame
 from constants import *
-from theme import GOLD, draw_hatch
+from theme import GOLD
 from tiles import draw_army_badge, draw_city, terrain_surface
 
 
 def draw_unit_icon(surface, cx, cy, unit_type, embarked=False):
     from tiles import _figure, _ship
-    from constants import COUNTRY_COLORS, Country
 
     if embarked:
         _ship(surface, cx, cy)
@@ -48,28 +47,31 @@ class Cell:
 
         tile = pygame.Rect(screen_x, screen_y, CELL_SIZE, CELL_SIZE)
         if self.country != Country.NONE:
-            wash = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-            wash.fill((*COUNTRY_COLORS[self.country], 36))
-            surface.blit(wash, (screen_x, screen_y))
-            draw_hatch(
-                surface,
-                tile,
-                COUNTRY_HATCH.get(self.country, "dots"),
-                (*COUNTRY_COLORS[self.country], 70),
-                step=6,
-            )
-            self._draw_political_borders(surface, screen_x, screen_y, grid)
+            overlay = getattr(assets, "overlays", {}).get(self.country) if assets else None
+            if overlay:
+                surface.blit(overlay, (screen_x, screen_y))
+            else:
+                wash = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+                wash.fill((*COUNTRY_COLORS[self.country], 40))
+                surface.blit(wash, (screen_x, screen_y))
+                self._draw_political_borders(surface, screen_x, screen_y, grid)
 
         if self.terrain == TerrainType.WATER and grid is not None:
             self._draw_coast_foam(surface, screen_x, screen_y, grid)
 
         if self.is_capital or self.is_city:
-            draw_city(surface, self, screen_x, screen_y, compact=bool(self.army and show_units))
+            draw_city(
+                surface,
+                self,
+                screen_x,
+                screen_y,
+                compact=bool(self.army and show_units),
+                assets=assets,
+            )
 
         if show_units and self.army:
             draw_army_badge(surface, screen_x, screen_y, self.army, assets)
 
-        pygame.draw.rect(surface, (58, 44, 28), tile, 1)
         if self.is_selected:
             pygame.draw.rect(surface, GOLD, tile.inflate(-2, -2), 2)
 

@@ -4,7 +4,7 @@ from constants import TerrainType, Country, UnitType, CELL_SIZE
 
 
 class AssetLoader:
-    """Loads and caches game sprites with pre-scaled sizes."""
+    """Charge les PNG du dossier assets, avec plusieurs noms de fichiers acceptés."""
 
     def __init__(self, base_path="assets"):
         self.base_path = base_path
@@ -12,45 +12,121 @@ class AssetLoader:
         self.overlays = {}
         self.units = {}
         self.buildings = {}
+        self._index = {}
+        self._index_files()
         self._load_all()
 
-    def _safe_load(self, relative_path, size):
-        full_path = os.path.join(self.base_path, relative_path)
-        if not os.path.exists(full_path):
-            return None
+    def _index_files(self):
+        if not os.path.isdir(self.base_path):
+            return
+        for root, _dirs, files in os.walk(self.base_path):
+            for name in files:
+                lower = name.lower()
+                if lower.endswith(".png") or lower.endswith(".jpg") or lower.endswith(".webp"):
+                    self._index[lower] = os.path.join(root, name)
 
-        image = pygame.image.load(full_path).convert_alpha()
+    def _load_path(self, path, size):
+        if not path or not os.path.exists(path):
+            return None
+        image = pygame.image.load(path).convert_alpha()
         return pygame.transform.smoothscale(image, size)
 
+    def _load_named(self, filenames, size):
+        for name in filenames:
+            path = os.path.join(self.base_path, name.replace("/", os.sep))
+            loaded = self._load_path(path, size)
+            if loaded:
+                return loaded
+        for name in filenames:
+            keyed = os.path.basename(name).lower()
+            if keyed in self._index:
+                loaded = self._load_path(self._index[keyed], size)
+                if loaded:
+                    return loaded
+        return None
+
+    def _load_keywords(self, keywords, size):
+        for filename, path in self._index.items():
+            stem = os.path.splitext(filename)[0]
+            if any(word in stem for word in keywords):
+                loaded = self._load_path(path, size)
+                if loaded:
+                    return loaded
+        return None
+
+    def _pick(self, filenames, keywords, size):
+        return self._load_named(filenames, size) or self._load_keywords(keywords, size)
+
     def _load_all(self):
-        # Terrain tiles rendered at one full cell.
+        tile = (CELL_SIZE, CELL_SIZE)
+        unit = (max(20, CELL_SIZE - 10), max(20, CELL_SIZE - 10))
+        building = (max(22, CELL_SIZE - 8), max(22, CELL_SIZE - 8))
+
         self.terrain = {
-            TerrainType.PLAIN: self._safe_load("terrain/terrain_plain.png", (CELL_SIZE, CELL_SIZE)),
-            TerrainType.FOREST: self._safe_load("terrain/terrain_forest.png", (CELL_SIZE, CELL_SIZE)),
-            TerrainType.MOUNTAIN: self._safe_load("terrain/terrain_mountain.png", (CELL_SIZE, CELL_SIZE)),
-            TerrainType.WATER: self._safe_load("terrain/terrain_water.png", (CELL_SIZE, CELL_SIZE)),
-            TerrainType.BEACH: self._safe_load("terrain/terrain_beach.png", (CELL_SIZE, CELL_SIZE)),
-            TerrainType.BRIDGE: self._safe_load("terrain/terrain_bridge.png", (CELL_SIZE, CELL_SIZE)),
+            TerrainType.PLAIN: self._pick(
+                ["terrain/terrain_plain.png", "terrain/plain.png", "plain.png"],
+                ("plain", "plaine", "grass"),
+                tile,
+            ),
+            TerrainType.FOREST: self._pick(
+                ["terrain/terrain_forest.png", "terrain/forest.png", "forest.png"],
+                ("forest", "foret", "bois"),
+                tile,
+            ),
+            TerrainType.MOUNTAIN: self._pick(
+                ["terrain/terrain_mountain.png", "terrain/mountain.png", "mountain.png"],
+                ("mountain", "montagne"),
+                tile,
+            ),
+            TerrainType.WATER: self._pick(
+                ["terrain/terrain_water.png", "terrain/water.png", "water.png"],
+                ("water", "eau", "ocean"),
+                tile,
+            ),
+            TerrainType.BEACH: self._pick(
+                ["terrain/terrain_beach.png", "terrain/beach.png", "beach.png"],
+                ("beach", "plage", "sand"),
+                tile,
+            ),
+            TerrainType.BRIDGE: self._pick(
+                ["terrain/terrain_bridge.png", "terrain/bridge.png", "bridge.png"],
+                ("bridge", "pont"),
+                tile,
+            ),
         }
-
-        # Country border overlays (drawn over terrain).
         self.overlays = {
-            Country.RED: self._safe_load("overlay/border_red.png", (CELL_SIZE, CELL_SIZE)),
-            Country.BLUE: self._safe_load("overlay/border_blue.png", (CELL_SIZE, CELL_SIZE)),
-            Country.GREEN: self._safe_load("overlay/border_green.png", (CELL_SIZE, CELL_SIZE)),
-            Country.YELLOW: self._safe_load("overlay/border_yellow.png", (CELL_SIZE, CELL_SIZE)),
-            Country.ORANGE: self._safe_load("overlay/border_orange.png", (CELL_SIZE, CELL_SIZE)),
+            Country.RED: self._pick(["overlay/border_red.png"], ("border_red", "rouge"), tile),
+            Country.BLUE: self._pick(["overlay/border_blue.png"], ("border_blue", "bleu"), tile),
+            Country.GREEN: self._pick(["overlay/border_green.png"], ("border_green", "vert"), tile),
+            Country.YELLOW: self._pick(["overlay/border_yellow.png"], ("border_yellow", "jaune"), tile),
+            Country.ORANGE: self._pick(["overlay/border_orange.png"], ("border_orange", "orange"), tile),
         }
-
-        # Units are smaller than a full tile.
         self.units = {
-            UnitType.SWORDSMAN: self._safe_load("units/unit_swordsman.png", (24, 24)),
-            UnitType.CROSSBOWMAN: self._safe_load("units/unit_crossbowman.png", (24, 24)),
-            UnitType.CAVALRY: self._safe_load("units/unit_cavalry.png", (24, 24)),
+            UnitType.SWORDSMAN: self._pick(
+                ["units/unit_swordsman.png", "units/swordsman.png", "swordsman.png"],
+                ("swordsman", "spadassin", "epee", "sword"),
+                unit,
+            ),
+            UnitType.CROSSBOWMAN: self._pick(
+                ["units/unit_crossbowman.png", "units/crossbowman.png", "crossbowman.png"],
+                ("crossbow", "arbalet", "archer"),
+                unit,
+            ),
+            UnitType.CAVALRY: self._pick(
+                ["units/unit_cavalry.png", "units/cavalry.png", "cavalry.png"],
+                ("cavalry", "cavalerie", "horse", "cheval"),
+                unit,
+            ),
         }
-
-        # Buildings.
         self.buildings = {
-            "capital": self._safe_load("buildings/capital.png", (22, 22)),
-            "city": self._safe_load("buildings/city.png", (18, 18)),
+            "capital": self._pick(
+                ["buildings/capital.png", "buildings/palace.png", "capital.png"],
+                ("capital", "palais", "castle", "forteresse"),
+                building,
+            ),
+            "city": self._pick(
+                ["buildings/city.png", "buildings/ville.png", "city.png"],
+                ("city", "ville", "town", "village"),
+                (max(18, CELL_SIZE - 12), max(18, CELL_SIZE - 12)),
+            ),
         }

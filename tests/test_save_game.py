@@ -102,6 +102,14 @@ class SaveGameTests(unittest.TestCase):
         loaded.audio = MagicMock()
         self.assertFalse(save_game.load_game(loaded))
 
+    def test_legacy_v2_save_rejected(self):
+        with open(self.save_path, "w", encoding="utf-8") as f:
+            json.dump({"version": 2, "grid": []}, f)
+        loaded = MagicMock()
+        loaded.screen = MagicMock()
+        loaded.audio = MagicMock()
+        self.assertFalse(save_game.load_game(loaded))
+
     def test_legacy_v1_save_rejected(self):
         with open(self.save_path, "w", encoding="utf-8") as f:
             json.dump({"version": 1, "grid": []}, f)

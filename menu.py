@@ -12,7 +12,6 @@ from theme import (
     WOOD_DARK,
     WOOD_LIGHT,
     draw_bevel_rect,
-    draw_hatch,
     load_font,
 )
 
@@ -28,7 +27,7 @@ class Button:
     def draw(self, surface, font):
         fill = self.hover_color if self.is_hovered else self.color
         draw_bevel_rect(surface, self.rect, fill, GOLD_BRIGHT, WOOD_DARK, 2)
-        pygame.draw.rect(surface, GOLD, self.rect.inflate(-4, -4), 1)
+        pygame.draw.rect(surface, GOLD, self.rect, 1)
         text_surface = font.render(self.text, True, CREAM)
         text_rect = text_surface.get_rect(center=self.rect.center)
         surface.blit(text_surface, text_rect)
@@ -52,17 +51,17 @@ class Menu:
         self.selected_mode = None
 
         button_width = 320
-        button_height = 52
+        button_height = 48
         button_x = (WINDOW_WIDTH - button_width) // 2
-        start_y = 340
+        start_y = 230
 
         self.btn_new_game = Button(button_x, start_y, button_width, button_height, "Nouvelle partie")
-        self.btn_load_game = Button(button_x, start_y + 66, button_width, button_height, "Charger une partie")
-        self.btn_quit = Button(button_x, start_y + 132, button_width, button_height, "Quitter")
-        self.btn_solo = Button(button_x, start_y, button_width, button_height, "Solo  —  un royaume")
-        self.btn_godgame = Button(button_x, start_y + 66, button_width, button_height, "Dieu  —  tous les royaumes")
-        self.btn_back = Button(button_x, start_y + 132, button_width, button_height, "Retour")
-        self.btn_difficulty = Button(button_x, start_y + 198, button_width, 44, "")
+        self.btn_load_game = Button(button_x, start_y + 58, button_width, button_height, "Charger une partie")
+        self.btn_quit = Button(button_x, start_y + 116, button_width, button_height, "Quitter")
+        self.btn_solo = Button(button_x, start_y, button_width, button_height, "Solo, un royaume")
+        self.btn_godgame = Button(button_x, start_y + 58, button_width, button_height, "Dieu, tous les royaumes")
+        self.btn_back = Button(button_x, start_y + 116, button_width, button_height, "Retour")
+        self.btn_difficulty = Button(button_x, start_y + 174, button_width, 42, "")
         self.settings = load_settings()
         self.load_error = ""
 
@@ -118,42 +117,19 @@ class Menu:
         pygame.draw.rect(self.screen, WOOD, frame.inflate(10, 10), 10)
         pygame.draw.rect(self.screen, GOLD, frame, 3)
 
-    def _draw_kingdom_legend(self):
-        items = [
-            (Country.RED, "Rouge"),
-            (Country.BLUE, "Bleu"),
-            (Country.GREEN, "Vert"),
-            (Country.YELLOW, "Jaune"),
-            (Country.ORANGE, "Orange"),
-        ]
-        swatch = 22
-        gap = 18
-        widths = [swatch + 8 + self.font_small.size(name)[0] for _, name in items]
-        total = sum(widths) + gap * (len(items) - 1)
-        x = (WINDOW_WIDTH - total) // 2
-        y = 258
-        for (country, name), w in zip(items, widths):
-            tile = pygame.Rect(x, y, swatch, swatch)
-            pygame.draw.rect(self.screen, TERRAIN_COLORS[TerrainType.PLAIN], tile)
-            draw_hatch(self.screen, tile, COUNTRY_HATCH[country], (*COUNTRY_COLORS[country], 160), 4)
-            pygame.draw.rect(self.screen, COUNTRY_COLORS[country], tile, 2)
-            self.screen.blit(self.font_small.render(name, True, INK), (x + swatch + 6, y + 1))
-            x += w + gap
-
     def draw(self):
         self._draw_backdrop()
         title = self.font_title.render("The World Is Ours", True, WOOD_DARK)
-        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2 + 2, 132)))
+        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2 + 2, 92)))
         title = self.font_title.render("The World Is Ours", True, (120, 48, 28))
-        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 130)))
+        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 90)))
         if self.state == "main":
-            subtitle = self.font_small.render("Une civilisation naît sur cinq îles.", True, INK)
+            subtitle = self.font_small.render("Cinq royaumes, une mer.", True, INK)
         else:
             subtitle = self.font_small.render("Choisis comment gouverner.", True, INK)
-        self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_WIDTH // 2, 188)))
-        hint = self.font_small.render("Objectif : toutes les capitales, ou le dernier royaume debout.", True, INK)
-        self.screen.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, 224)))
-        self._draw_kingdom_legend()
+        self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_WIDTH // 2, 148)))
+        hint = self.font_small.render("Prends toutes les capitales, ou reste le dernier debout.", True, INK)
+        self.screen.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, 178)))
 
         if self.state == "main":
             self.btn_new_game.draw(self.screen, self.font_button)
@@ -170,10 +146,4 @@ class Menu:
             self.btn_solo.draw(self.screen, self.font_button)
             self.btn_godgame.draw(self.screen, self.font_button)
             self.btn_back.draw(self.screen, self.font_button)
-            legend = self.font_small.render(
-                "S spadassin   A arbalète   C cavalerie   —   motifs = royaumes",
-                True,
-                INK,
-            )
-            self.screen.blit(legend, legend.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - 48)))
         pygame.display.flip()
