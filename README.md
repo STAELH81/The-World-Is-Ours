@@ -30,9 +30,9 @@ Quand un royaume n’a plus d’armées ni de villes/capitales sur son territoir
 | Tir à distance | Clic sur une case violette (arbalétrier) |
 | Annuler l’ordre | Clic droit ou **Échap** |
 | Recruter | Clique une ville : 3 cartes de production en bas |
-| Construire | Clique une case libre : fonder une ville. Pont seulement en bord de mer |
-| Embarquer | Clique une case cyan (côte) |
-| Débarquer | Clique une case verte, ou « Débarquer ici » sur une plage |
+| Construire | Clique une case libre : fonder une ville. Pont seulement sur un détroit |
+| Embarquer | Clique une case d’eau cyan — pas une plage |
+| Débarquer | Clique une terre ou une plage verte depuis le navire |
 | Fortifier | Seul bouton d’unité, dans le panneau du bas |
 | Recherche tech | Pastille en haut à droite |
 | Fin de tour | Bouton vert bas-droite, ou **Espace** |
@@ -42,9 +42,11 @@ Quand un royaume n’a plus d’armées ni de villes/capitales sur son territoir
 
 En **solo**, le brouillard reste toujours celui du **Royaume Rouge** (pas la vision des tours IA).
 
+L’interface suit le modèle Civ : la carte est plein écran. Une barre du haut montre l’or et le tour, le panneau du bas n’affiche **que** les actions de la case cliquée, et **Fin de tour** est le gros bouton vert.
+
 ## Mer
 
-Les plages sont des cases côtières : un navire peut y rester, puis **débarquer sur place**. L’embarquement coûte de l’or et consomme tous les PM. Un navire ne capture pas les terres ; il faut débarquer pour se battre à pied.
+Les plages se **marchent à pied**. On n’embarque qu’en cliquant une case d’**eau** (cyan). Un navire reste sur l’eau ou un pont ; il débarque sur une terre ou une plage. Un pont ne se construit que sur un **détroit** (eau coincée entre deux terres), pas le long d’une plage.
 
 ## Traits des royaumes
 

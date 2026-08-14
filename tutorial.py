@@ -19,7 +19,7 @@ TUTORIAL_STEPS = [
     ),
     (
         "Mer",
-        "Les cases cyan embarquent. Sur une plage, clique la case du navire ou « Débarquer ici ».",
+        "La plage se marche à pied. Clique l'eau cyan pour embarquer, le vert pour débarquer.",
     ),
     (
         "Fin de tour",

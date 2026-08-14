@@ -46,8 +46,9 @@ class Country(Enum):
 
 
 LAND_TERRAINS = (TerrainType.PLAIN, TerrainType.MOUNTAIN, TerrainType.FOREST)
-NAVAL_TERRAINS = (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
-DISEMBARK_TERRAINS = (TerrainType.PLAIN, TerrainType.MOUNTAIN, TerrainType.FOREST, TerrainType.BEACH)
+SHORE_TERRAINS = LAND_TERRAINS + (TerrainType.BEACH,)
+NAVAL_TERRAINS = (TerrainType.WATER, TerrainType.BRIDGE)
+DISEMBARK_TERRAINS = SHORE_TERRAINS
 
 TERRAIN_COLORS = {
     TerrainType.PLAIN: (126, 200, 80),

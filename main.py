@@ -539,20 +539,17 @@ class Game:
             return False
         if self.get_adjacent_enemy_cells(cell, cell.army.country):
             return False
-        if cell.terrain == TerrainType.BEACH:
-            return True
-        return any(n.terrain in (TerrainType.WATER, TerrainType.BEACH) for n in self._neighbors(cell))
+        return any(
+            neighbor.terrain == TerrainType.WATER and not neighbor.army
+            for neighbor in self._neighbors(cell)
+        )
 
     def get_embark_targets(self, from_cell):
         targets = set()
         if not self.can_embark_from(from_cell):
             return targets
-        if from_cell.terrain == TerrainType.BEACH:
-            targets.add((from_cell.x, from_cell.y))
         for neighbor in self._neighbors(from_cell):
-            if neighbor.terrain not in (TerrainType.WATER, TerrainType.BEACH):
-                continue
-            if neighbor.army:
+            if neighbor.terrain != TerrainType.WATER or neighbor.army:
                 continue
             targets.add((neighbor.x, neighbor.y))
         return targets
@@ -769,30 +766,14 @@ class Game:
                 cell.country = self.current_player_country
 
     def build_bridge_on_cell(self, cell):
-        """Construit un pont sur une case d'eau adjacente à un territoire allié."""
+        """Construit un pont uniquement sur un détroit (eau entre deux terres)."""
         player = self.players[self.current_player_country]
-
-        if cell.terrain != TerrainType.WATER:
-            return False
-
-        if cell.army:
+        if not self.is_valid_bridge_site(cell):
             return False
 
         bridge_cost = player.bridge_cost()
         if player.gold < bridge_cost:
             self.log_event(f"Pas assez d'or pour un pont ({player.gold}/{bridge_cost})")
-            return False
-
-        adjacent_allied = False
-        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-            nx, ny = cell.x + dx, cell.y + dy
-            if 0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS:
-                neighbor = self.grid[nx][ny]
-                if neighbor.country == self.current_player_country and neighbor.terrain != TerrainType.WATER:
-                    adjacent_allied = True
-                    break
-
-        if not adjacent_allied:
             return False
 
         player.spend_gold(bridge_cost)
@@ -807,21 +788,39 @@ class Game:
         targets = set()
         for x in range(GRID_COLS):
             for y in range(GRID_ROWS):
-                cell = self.grid[x][y]
-                if cell.terrain != TerrainType.WATER or cell.army:
-                    continue
-                if self.build_bridge_on_cell_preview(cell):
+                if self.is_valid_bridge_site(self.grid[x][y]):
                     targets.add((x, y))
         self.bridge_targets = targets
 
-    def build_bridge_on_cell_preview(self, cell):
-        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-            nx, ny = cell.x + dx, cell.y + dy
-            if 0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS:
-                neighbor = self.grid[nx][ny]
-                if neighbor.country == self.current_player_country and neighbor.terrain != TerrainType.WATER:
-                    return True
-        return False
+    def _neighbor_at(self, cell, dx, dy):
+        nx, ny = cell.x + dx, cell.y + dy
+        if 0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS:
+            return self.grid[nx][ny]
+        return None
+
+    def is_valid_bridge_site(self, cell):
+        if not cell or cell.terrain != TerrainType.WATER or cell.army:
+            return False
+        north = self._neighbor_at(cell, 0, -1)
+        south = self._neighbor_at(cell, 0, 1)
+        west = self._neighbor_at(cell, -1, 0)
+        east = self._neighbor_at(cell, 1, 0)
+
+        def is_shore(tile):
+            return tile is not None and tile.terrain in SHORE_TERRAINS
+
+        crossing = (is_shore(north) and is_shore(south)) or (is_shore(west) and is_shore(east))
+        if not crossing:
+            return False
+        return any(
+            neighbor.country == self.current_player_country and neighbor.terrain in SHORE_TERRAINS
+            for neighbor in self._neighbors(cell)
+        )
+
+    def has_adjacent_bridge_site(self, cell):
+        if not cell:
+            return False
+        return any(self.is_valid_bridge_site(neighbor) for neighbor in self._neighbors(cell))
 
     def reset_army_moves_for_country(self, country):
         for x in range(GRID_COLS):
@@ -1117,11 +1116,6 @@ class Game:
                 if army and army.country == country and army.movement_left > 0:
                     idle += 1
         return idle
-
-    def cell_has_adjacent_water(self, cell):
-        if not cell or cell.terrain == TerrainType.WATER:
-            return False
-        return any(neighbor.terrain == TerrainType.WATER for neighbor in self._neighbors(cell))
 
     def get_ai_turn_delay_ms(self):
         return AI_SPEED_DELAYS_MS.get(self.settings.get("ai_speed", "normal"), 1000)

@@ -38,6 +38,13 @@ class HudLayoutTests(unittest.TestCase):
         self.assertFalse(ctx["can_recruit"])
 
         game.grid[5][6].terrain = TerrainType.WATER
+        game.grid[5][7].terrain = TerrainType.WATER
+        game.grid[4][6].terrain = TerrainType.WATER
+        game.grid[6][6].terrain = TerrainType.WATER
+        ctx = ui.context(game)
+        self.assertFalse(ctx["can_build_bridge"])
+
+        game.grid[5][7].terrain = TerrainType.PLAIN
         ctx = ui.context(game)
         self.assertTrue(ctx["can_build_bridge"])
 

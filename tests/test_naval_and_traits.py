@@ -111,16 +111,20 @@ class NavalAndTraitTests(unittest.TestCase):
         water.terrain = TerrainType.WATER
         inland.terrain = TerrainType.PLAIN
 
-        self.assertIn((beach.x, beach.y), game.get_embark_targets(land))
-        self.assertTrue(game.embark_army(land, beach))
-        self.assertIsNone(land.army)
-        self.assertTrue(beach.army.embarked)
-        self.assertEqual(game.players[Country.RED].gold, 500 - game.players[Country.RED].embark_cost())
+        self.assertNotIn((beach.x, beach.y), game.get_embark_targets(land))
+        self.assertNotIn((water.x, water.y), game.get_embark_targets(land))
+
+        game.move_army(land, beach)
+        self.assertIsNotNone(beach.army)
+        self.assertFalse(beach.army.embarked)
+        self.assertEqual(game.players[Country.RED].gold, 500)
 
         beach.army.refresh_movement(game.players[Country.RED])
-        game.move_army(beach, water)
-        self.assertTrue(water.army.embarked)
+        self.assertIn((water.x, water.y), game.get_embark_targets(beach))
+        self.assertTrue(game.embark_army(beach, water))
         self.assertIsNone(beach.army)
+        self.assertTrue(water.army.embarked)
+        self.assertEqual(game.players[Country.RED].gold, 500 - game.players[Country.RED].embark_cost())
 
         water.army.refresh_movement(game.players[Country.RED])
         self.assertIn((inland.x, inland.y), game.get_disembark_targets(water))
@@ -128,17 +132,34 @@ class NavalAndTraitTests(unittest.TestCase):
         self.assertIsNone(water.army)
         self.assertFalse(inland.army.embarked)
 
-    def test_in_place_beach_disembark(self):
+    def test_walking_on_beach_does_not_embark(self):
         game = make_stub_game()
-        beach = game.grid[6][6]
+        land = game.grid[8][8]
+        beach = game.grid[8][9]
+        land.terrain = TerrainType.PLAIN
+        land.country = Country.RED
+        land.army = Army(Country.RED, UnitType.CAVALRY, 1)
+        land.army.refresh_movement(game.players[Country.RED])
         beach.terrain = TerrainType.BEACH
-        beach.army = Army(Country.RED, UnitType.SWORDSMAN, 2)
-        beach.army.embarked = True
-        beach.army.refresh_movement(game.players[Country.RED])
+        gold = game.players[Country.RED].gold
+        game.request_move(land, beach, animate=False)
+        self.assertIsNone(land.army)
+        self.assertFalse(beach.army.embarked)
+        self.assertEqual(game.players[Country.RED].gold, gold)
 
-        self.assertIn((beach.x, beach.y), game.get_disembark_targets(beach))
-        self.assertTrue(game.disembark_army(beach, beach))
-        self.assertIs(game.grid[6][6].army, beach.army)
+    def test_disembark_from_water_onto_beach(self):
+        game = make_stub_game()
+        water = game.grid[6][6]
+        beach = game.grid[6][7]
+        water.terrain = TerrainType.WATER
+        beach.terrain = TerrainType.BEACH
+        water.army = Army(Country.RED, UnitType.SWORDSMAN, 2)
+        water.army.embarked = True
+        water.army.refresh_movement(game.players[Country.RED])
+
+        self.assertIn((beach.x, beach.y), game.get_disembark_targets(water))
+        self.assertTrue(game.disembark_army(water, beach))
+        self.assertIsNone(water.army)
         self.assertFalse(beach.army.embarked)
 
     def test_ship_cannot_walk_inland_without_disembark(self):
@@ -155,6 +176,31 @@ class NavalAndTraitTests(unittest.TestCase):
         self.assertIs(water.army, game.grid[5][5].army)
         self.assertTrue(water.army.embarked)
         self.assertIsNone(inland.army)
+
+    def test_bridge_only_on_strait_not_along_beach(self):
+        game = make_stub_game()
+        left = game.grid[4][10]
+        water = game.grid[5][10]
+        right = game.grid[6][10]
+        coast_water = game.grid[5][11]
+        beach = game.grid[5][9]
+        left.terrain = TerrainType.PLAIN
+        left.country = Country.RED
+        right.terrain = TerrainType.PLAIN
+        water.terrain = TerrainType.WATER
+        beach.terrain = TerrainType.BEACH
+        beach.country = Country.RED
+        coast_water.terrain = TerrainType.WATER
+        game.grid[4][11].terrain = TerrainType.WATER
+        game.grid[6][11].terrain = TerrainType.WATER
+        game.grid[5][12].terrain = TerrainType.WATER
+
+        self.assertTrue(game.is_valid_bridge_site(water))
+        self.assertFalse(game.is_valid_bridge_site(coast_water))
+        self.assertFalse(game.is_valid_bridge_site(beach))
+        self.assertTrue(game.build_bridge_on_cell(water))
+        self.assertEqual(water.terrain, TerrainType.BRIDGE)
+        self.assertFalse(game.is_valid_bridge_site(coast_water))
 
     def test_friendly_city_merge_does_not_destroy_army(self):
         game = make_stub_game()

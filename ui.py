@@ -78,7 +78,7 @@ class UI:
             and own_tile
             and not info["own_army"]
             and not urban
-            and game.cell_has_adjacent_water(cell)
+            and game.has_adjacent_bridge_site(cell)
         ):
             info["can_build_bridge"] = True
         if info["own_army"]:
