@@ -1,85 +1,68 @@
+import math
 import pygame
 from constants import *
 from settings import load_settings, save_settings, cycle_value, DIFFICULTY_CONFIG
+from theme import (
+    CREAM,
+    GOLD,
+    GOLD_BRIGHT,
+    INK,
+    PARCHMENT,
+    WOOD,
+    WOOD_DARK,
+    WOOD_LIGHT,
+    draw_bevel_rect,
+    draw_hatch,
+    load_font,
+)
+
 
 class Button:
-    def __init__(self, x, y, width, height, text, color, hover_color):
+    def __init__(self, x, y, width, height, text, color=None, hover_color=None):
         self.rect = pygame.Rect(x, y, width, height)
         self.text = text
-        self.color = color
-        self.hover_color = hover_color
+        self.color = color or WOOD
+        self.hover_color = hover_color or WOOD_LIGHT
         self.is_hovered = False
-        
+
     def draw(self, surface, font):
-        color = self.hover_color if self.is_hovered else self.color
-        pygame.draw.rect(surface, color, self.rect, border_radius=8)
-        pygame.draw.rect(surface, (255, 255, 255), self.rect, 2, border_radius=8)
-        
-        text_surface = font.render(self.text, True, (255, 255, 255))
+        fill = self.hover_color if self.is_hovered else self.color
+        draw_bevel_rect(surface, self.rect, fill, GOLD_BRIGHT, WOOD_DARK, 2)
+        pygame.draw.rect(surface, GOLD, self.rect.inflate(-4, -4), 1)
+        text_surface = font.render(self.text, True, CREAM)
         text_rect = text_surface.get_rect(center=self.rect.center)
         surface.blit(text_surface, text_rect)
-    
+
     def handle_event(self, event):
         if event.type == pygame.MOUSEMOTION:
             self.is_hovered = self.rect.collidepoint(event.pos)
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            # Use click position directly so a click works
-            # even if no prior MOUSEMOTION was emitted.
             if self.rect.collidepoint(event.pos):
                 return True
         return False
 
+
 class Menu:
     def __init__(self, screen):
         self.screen = screen
-        self.font_title = pygame.font.Font(None, 72)
-        self.font_button = pygame.font.Font(None, 36)
-        self.font_small = pygame.font.Font(None, 24)
-        
-        # État du menu
-        self.state = "main"  # main, mode_select
+        self.font_title = load_font(54, bold=True)
+        self.font_button = load_font(28, bold=True)
+        self.font_small = load_font(20)
+        self.state = "main"
         self.selected_mode = None
-        
-        # Boutons menu principal
-        button_width = 300
-        button_height = 60
+
+        button_width = 320
+        button_height = 52
         button_x = (WINDOW_WIDTH - button_width) // 2
-        start_y = 300
-        
-        self.btn_new_game = Button(
-            button_x, start_y, button_width, button_height,
-            "Nouvelle Partie", (41, 128, 185), (52, 152, 219)
-        )
-        
-        self.btn_load_game = Button(
-            button_x, start_y + 80, button_width, button_height,
-            "Charger Partie", (39, 174, 96), (46, 204, 113)
-        )
-        
-        self.btn_quit = Button(
-            button_x, start_y + 160, button_width, button_height,
-            "Quitter", (192, 57, 43), (231, 76, 60)
-        )
-        
-        # Boutons sélection de mode
-        self.btn_solo = Button(
-            button_x, start_y, button_width, button_height,
-            "Solo (vs IA)", (142, 68, 173), (155, 89, 182)
-        )
-        
-        self.btn_godgame = Button(
-            button_x, start_y + 80, button_width, button_height,
-            "God Game", (230, 126, 34), (243, 156, 18)
-        )
-        
-        self.btn_back = Button(
-            button_x, start_y + 160, button_width, button_height,
-            "Retour", (127, 140, 141), (149, 165, 166)
-        )
-        self.btn_difficulty = Button(
-            button_x, start_y + 240, button_width, 44,
-            "", (90, 110, 150), (105, 130, 170)
-        )
+        start_y = 340
+
+        self.btn_new_game = Button(button_x, start_y, button_width, button_height, "Nouvelle partie")
+        self.btn_load_game = Button(button_x, start_y + 66, button_width, button_height, "Charger une partie")
+        self.btn_quit = Button(button_x, start_y + 132, button_width, button_height, "Quitter")
+        self.btn_solo = Button(button_x, start_y, button_width, button_height, "Solo  —  un royaume")
+        self.btn_godgame = Button(button_x, start_y + 66, button_width, button_height, "Dieu  —  tous les royaumes")
+        self.btn_back = Button(button_x, start_y + 132, button_width, button_height, "Retour")
+        self.btn_difficulty = Button(button_x, start_y + 198, button_width, 44, "")
         self.settings = load_settings()
         self.load_error = ""
 
@@ -89,14 +72,11 @@ class Menu:
                 self.state = "mode_select"
                 self.settings = load_settings()
                 return None
-            
             if self.btn_load_game.handle_event(event):
                 self.load_error = ""
                 return "load"
-            
             if self.btn_quit.handle_event(event):
                 return "quit"
-        
         elif self.state == "mode_select":
             if self.btn_difficulty.handle_event(event):
                 self.settings["difficulty"] = cycle_value(
@@ -105,59 +85,83 @@ class Menu:
                 )
                 self.settings = save_settings(self.settings)
                 return None
-
             if self.btn_solo.handle_event(event):
                 return "start_solo"
-            
             if self.btn_godgame.handle_event(event):
                 return "start_godgame"
-            
             if self.btn_back.handle_event(event):
                 self.state = "main"
                 return None
-        
         return None
-    
+
     def _draw_backdrop(self):
-        import math
         t = pygame.time.get_ticks() / 1000.0
-        self.screen.fill((14, 32, 58))
-        for i in range(18):
-            y = int((i * 58 + t * 28) % (WINDOW_HEIGHT + 40)) - 20
-            shade = 28 + (i % 4) * 6
-            pygame.draw.line(self.screen, (shade, 70 + i % 5, 110), (0, y), (WINDOW_WIDTH, y + 8), 2)
+        self.screen.fill(WOOD_DARK)
+        pygame.draw.rect(self.screen, PARCHMENT, (24, 24, WINDOW_WIDTH - 48, WINDOW_HEIGHT - 48))
+        for x in range(24, WINDOW_WIDTH - 24, 36):
+            pygame.draw.line(self.screen, (214, 196, 158), (x, 24), (x, WINDOW_HEIGHT - 24))
+        for y in range(24, WINDOW_HEIGHT - 24, 36):
+            pygame.draw.line(self.screen, (214, 196, 158), (24, y), (WINDOW_WIDTH - 24, y))
         islands = [
-            (int(WINDOW_WIDTH * 0.22), int(WINDOW_HEIGHT * 0.22), Country.RED),
-            (int(WINDOW_WIDTH * 0.78), int(WINDOW_HEIGHT * 0.18), Country.BLUE),
-            (int(WINDOW_WIDTH * 0.28), int(WINDOW_HEIGHT * 0.72), Country.GREEN),
-            (int(WINDOW_WIDTH * 0.82), int(WINDOW_HEIGHT * 0.68), Country.YELLOW),
-            (int(WINDOW_WIDTH * 0.50), int(WINDOW_HEIGHT * 0.42), Country.ORANGE),
+            (int(WINDOW_WIDTH * 0.28), int(WINDOW_HEIGHT * 0.30), Country.RED),
+            (int(WINDOW_WIDTH * 0.70), int(WINDOW_HEIGHT * 0.26), Country.BLUE),
+            (int(WINDOW_WIDTH * 0.30), int(WINDOW_HEIGHT * 0.72), Country.GREEN),
+            (int(WINDOW_WIDTH * 0.72), int(WINDOW_HEIGHT * 0.70), Country.YELLOW),
+            (int(WINDOW_WIDTH * 0.50), int(WINDOW_HEIGHT * 0.50), Country.ORANGE),
         ]
         for x, y, country in islands:
-            bob = int(6 * math.sin(t * 1.1 + x))
-            pygame.draw.ellipse(self.screen, (48, 120, 62), (x - 70, y - 40 + bob, 140, 80))
-            pygame.draw.ellipse(self.screen, COUNTRY_COLORS[country], (x - 18, y - 10 + bob, 36, 24))
-        veil = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
-        veil.fill((8, 10, 16, 120))
-        self.screen.blit(veil, (0, 0))
+            bob = int(3 * math.sin(t * 0.7 + x))
+            pygame.draw.ellipse(self.screen, (48, 92, 128), (x - 86, y - 48 + bob, 172, 96))
+            pygame.draw.ellipse(self.screen, (92, 128, 64), (x - 70, y - 36 + bob, 140, 72))
+            pygame.draw.ellipse(self.screen, COUNTRY_COLORS[country], (x - 14, y - 8 + bob, 28, 18))
+        frame = pygame.Rect(18, 18, WINDOW_WIDTH - 36, WINDOW_HEIGHT - 36)
+        pygame.draw.rect(self.screen, WOOD, frame.inflate(10, 10), 10)
+        pygame.draw.rect(self.screen, GOLD, frame, 3)
+
+    def _draw_kingdom_legend(self):
+        items = [
+            (Country.RED, "Rouge"),
+            (Country.BLUE, "Bleu"),
+            (Country.GREEN, "Vert"),
+            (Country.YELLOW, "Jaune"),
+            (Country.ORANGE, "Orange"),
+        ]
+        swatch = 22
+        gap = 18
+        widths = [swatch + 8 + self.font_small.size(name)[0] for _, name in items]
+        total = sum(widths) + gap * (len(items) - 1)
+        x = (WINDOW_WIDTH - total) // 2
+        y = 258
+        for (country, name), w in zip(items, widths):
+            tile = pygame.Rect(x, y, swatch, swatch)
+            pygame.draw.rect(self.screen, TERRAIN_COLORS[TerrainType.PLAIN], tile)
+            draw_hatch(self.screen, tile, COUNTRY_HATCH[country], (*COUNTRY_COLORS[country], 160), 4)
+            pygame.draw.rect(self.screen, COUNTRY_COLORS[country], tile, 2)
+            self.screen.blit(self.font_small.render(name, True, INK), (x + swatch + 6, y + 1))
+            x += w + gap
 
     def draw(self):
         self._draw_backdrop()
-        title = self.font_title.render("The World Is Ours", True, (255, 215, 0))
-        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 150)))
+        title = self.font_title.render("The World Is Ours", True, WOOD_DARK)
+        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2 + 2, 132)))
+        title = self.font_title.render("The World Is Ours", True, (120, 48, 28))
+        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 130)))
         if self.state == "main":
-            subtitle = self.font_small.render("Un jeu de conquête médiéval", True, (200, 200, 200))
+            subtitle = self.font_small.render("Une civilisation naît sur cinq îles.", True, INK)
         else:
-            subtitle = self.font_small.render("Choisissez votre mode de jeu", True, (200, 200, 200))
-        self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_WIDTH // 2, 220)))
+            subtitle = self.font_small.render("Choisis comment gouverner.", True, INK)
+        self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_WIDTH // 2, 188)))
+        hint = self.font_small.render("Objectif : toutes les capitales, ou le dernier royaume debout.", True, INK)
+        self.screen.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, 224)))
+        self._draw_kingdom_legend()
 
         if self.state == "main":
             self.btn_new_game.draw(self.screen, self.font_button)
             self.btn_load_game.draw(self.screen, self.font_button)
             self.btn_quit.draw(self.screen, self.font_button)
             if self.load_error:
-                err = self.font_small.render(self.load_error, True, (240, 160, 140))
-                self.screen.blit(err, err.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - 50)))
+                err = self.font_small.render(self.load_error, True, (140, 36, 28))
+                self.screen.blit(err, err.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - 56)))
         elif self.state == "mode_select":
             labels = {"easy": "Facile", "normal": "Normal", "hard": "Difficile"}
             diff = self.settings.get("difficulty", "normal")
@@ -166,10 +170,10 @@ class Menu:
             self.btn_solo.draw(self.screen, self.font_button)
             self.btn_godgame.draw(self.screen, self.font_button)
             self.btn_back.draw(self.screen, self.font_button)
-            hint = self.font_small.render(
-                "Rouge : lames  ·  Bleu : mer  ·  Vert : forêts  ·  Jaune : or  ·  Orange : cavalerie",
+            legend = self.font_small.render(
+                "S spadassin   A arbalète   C cavalerie   —   motifs = royaumes",
                 True,
-                (170, 175, 185),
+                INK,
             )
-            self.screen.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - 40)))
+            self.screen.blit(legend, legend.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - 48)))
         pygame.display.flip()

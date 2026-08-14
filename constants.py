@@ -2,9 +2,9 @@ from enum import Enum
 
 GRID_COLS = 20
 GRID_ROWS = 30
-CELL_SIZE = 34
+CELL_SIZE = 36
 
-HUD_TOP = 52
+HUD_TOP = 70
 MAP_ORIGIN_X = 0
 MAP_ORIGIN_Y = HUD_TOP
 MAP_PIXEL_WIDTH = GRID_COLS * CELL_SIZE
@@ -51,21 +51,38 @@ NAVAL_TERRAINS = (TerrainType.WATER, TerrainType.BRIDGE)
 DISEMBARK_TERRAINS = SHORE_TERRAINS
 
 TERRAIN_COLORS = {
-    TerrainType.PLAIN: (126, 200, 80),
-    TerrainType.MOUNTAIN: (107, 66, 38),
-    TerrainType.FOREST: (45, 90, 27),
-    TerrainType.WATER: (26, 58, 107),
-    TerrainType.BEACH: (212, 197, 160),
-    TerrainType.BRIDGE: (127, 101, 65),
+    TerrainType.PLAIN: (148, 168, 92),
+    TerrainType.MOUNTAIN: (142, 118, 82),
+    TerrainType.FOREST: (46, 92, 40),
+    TerrainType.WATER: (48, 92, 128),
+    TerrainType.BEACH: (214, 196, 148),
+    TerrainType.BRIDGE: (132, 98, 58),
 }
 
 COUNTRY_COLORS = {
     Country.NONE: (255, 255, 255),
-    Country.RED: (192, 57, 43),
-    Country.BLUE: (41, 128, 185),
-    Country.GREEN: (39, 174, 96),
-    Country.YELLOW: (241, 196, 15),
-    Country.ORANGE: (230, 126, 34),
+    Country.RED: (176, 48, 36),
+    Country.BLUE: (36, 92, 156),
+    Country.GREEN: (36, 120, 64),
+    Country.YELLOW: (196, 156, 28),
+    Country.ORANGE: (196, 96, 28),
+}
+
+COUNTRY_HATCH = {
+    Country.RED: "diag",
+    Country.BLUE: "horiz",
+    Country.GREEN: "dots",
+    Country.YELLOW: "vert",
+    Country.ORANGE: "diag2",
+}
+
+COUNTRY_SHORT = {
+    Country.NONE: "—",
+    Country.RED: "Rouge",
+    Country.BLUE: "Bleu",
+    Country.GREEN: "Vert",
+    Country.YELLOW: "Jaune",
+    Country.ORANGE: "Orange",
 }
 
 COUNTRY_NAMES = {
@@ -101,6 +118,11 @@ UNIT_NAMES = {
     UnitType.SWORDSMAN: "Spadassin",
     UnitType.CROSSBOWMAN: "Arbalétrier",
     UnitType.CAVALRY: "Cavalerie",
+}
+UNIT_LETTERS = {
+    UnitType.SWORDSMAN: "S",
+    UnitType.CROSSBOWMAN: "A",
+    UnitType.CAVALRY: "C",
 }
 
 UNIT_COSTS = {

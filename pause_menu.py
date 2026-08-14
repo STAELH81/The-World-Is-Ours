@@ -3,6 +3,7 @@
 import pygame
 from constants import WINDOW_WIDTH, WINDOW_HEIGHT, GRID_COLS, CELL_SIZE
 from menu import Button
+from theme import INK, INK_SOFT, draw_panel, load_font
 
 MAP_WIDTH = GRID_COLS * CELL_SIZE
 from settings import (
@@ -20,8 +21,8 @@ class PauseMenu:
         self.open = False
         self.submenu = "main"
         self.settings = load_settings()
-        self.font_title = pygame.font.Font(None, 40)
-        self.font_body = pygame.font.Font(None, 26)
+        self.font_title = load_font(36, bold=True)
+        self.font_body = load_font(22)
         self._build_buttons()
 
     def _build_buttons(self):
@@ -29,16 +30,16 @@ class PauseMenu:
         cx = MAP_WIDTH // 2 - bw // 2
         y = WINDOW_HEIGHT // 2 - 90
 
-        self.btn_resume = Button(cx, y, bw, bh, "Reprendre", (39, 174, 96), (46, 204, 113))
-        self.btn_settings = Button(cx, y + 52, bw, bh, "Réglages", (41, 128, 185), (52, 152, 219))
-        self.btn_save = Button(cx, y + 104, bw, bh, "Sauvegarder", (127, 101, 65), (148, 122, 86))
-        self.btn_quit = Button(cx, y + 156, bw, bh, "Menu principal", (192, 57, 43), (231, 76, 60))
+        self.btn_resume = Button(cx, y, bw, bh, "Reprendre")
+        self.btn_settings = Button(cx, y + 52, bw, bh, "Réglages")
+        self.btn_save = Button(cx, y + 104, bw, bh, "Sauvegarder")
+        self.btn_quit = Button(cx, y + 156, bw, bh, "Menu principal")
 
-        self.btn_back = Button(cx, WINDOW_HEIGHT - 90, bw, bh, "Retour", (127, 140, 141), (149, 165, 166))
-        self.btn_vol_down = Button(cx + 20, 280, 60, 40, "-", (70, 80, 95), (90, 100, 115))
-        self.btn_vol_up = Button(cx + bw - 80, 280, 60, 40, "+", (70, 80, 95), (90, 100, 115))
-        self.btn_speed = Button(cx, 340, bw, 40, "", (70, 80, 95), (90, 100, 115))
-        self.btn_difficulty = Button(cx, 390, bw, 40, "", (70, 80, 95), (90, 100, 115))
+        self.btn_back = Button(cx, WINDOW_HEIGHT - 90, bw, bh, "Retour")
+        self.btn_vol_down = Button(cx + 20, 280, 60, 40, "-")
+        self.btn_vol_up = Button(cx + bw - 80, 280, 60, 40, "+")
+        self.btn_speed = Button(cx, 340, bw, 40, "")
+        self.btn_difficulty = Button(cx, 390, bw, 40, "")
 
     def toggle(self):
         self.open = not self.open
@@ -117,10 +118,13 @@ class PauseMenu:
             return
 
         overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 190))
+        overlay.fill((40, 24, 12, 180))
         self.screen.blit(overlay, (0, 0))
 
-        title = self.font_title.render("Pause", True, (255, 220, 120))
+        panel = pygame.Rect(MAP_WIDTH // 2 - 200, 70, 400, WINDOW_HEIGHT - 140)
+        draw_panel(self.screen, panel)
+
+        title = self.font_title.render("Pause", True, (120, 48, 28))
         self.screen.blit(title, title.get_rect(center=(MAP_WIDTH // 2, 120)))
 
         if self.submenu == "main":
@@ -128,15 +132,15 @@ class PauseMenu:
             self.btn_settings.draw(self.screen, self.font_body)
             self.btn_save.draw(self.screen, self.font_body)
             self.btn_quit.draw(self.screen, self.font_body)
-            hint = self.font_body.render("Echap : reprendre", True, (180, 180, 190))
+            hint = self.font_body.render("Échap : reprendre", True, INK_SOFT)
             self.screen.blit(hint, hint.get_rect(center=(MAP_WIDTH // 2, WINDOW_HEIGHT - 40)))
             return
 
-        settings_title = self.font_title.render("Réglages", True, (220, 220, 230))
+        settings_title = self.font_title.render("Réglages", True, (120, 48, 28))
         self.screen.blit(settings_title, settings_title.get_rect(center=(MAP_WIDTH // 2, 170)))
 
         vol_pct = int(self.settings["volume"] * 100)
-        vol_line = self.font_body.render(f"Volume: {vol_pct}%", True, (230, 230, 230))
+        vol_line = self.font_body.render(f"Volume: {vol_pct}%", True, INK)
         self.screen.blit(vol_line, (MAP_WIDTH // 2 - 140, 250))
         self.btn_vol_down.draw(self.screen, self.font_body)
         self.btn_vol_up.draw(self.screen, self.font_body)
@@ -159,7 +163,7 @@ class PauseMenu:
         self.btn_difficulty.draw(self.screen, self.font_body)
 
         note = self.font_body.render(
-            "En solo: brouillard toujours depuis le Royaume Rouge", True, (160, 170, 185)
+            "N : unité suivante   Espace : fin de tour", True, INK
         )
         self.screen.blit(note, note.get_rect(center=(MAP_WIDTH // 2, 450)))
 

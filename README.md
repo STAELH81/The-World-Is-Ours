@@ -25,28 +25,31 @@ Quand un royaume n’a plus d’armées ni de villes/capitales sur son territoir
 
 | Action | Comment |
 |--------|---------|
+| Unité suivante | **N** / **Tab**, ou le bouton bas-droite tant qu’il reste du mouvement |
 | Sélectionner une armée | Clic gauche : la portée s’affiche tout de suite |
-| Déplacer / attaquer | Clic sur une case surlignée |
-| Tir à distance | Clic sur une case violette (arbalétrier) |
+| Déplacer | Clic sur une case **+** |
+| Attaquer | Clic sur une case **X** |
+| Tir à distance | Clic sur une case **\*** (arbalétrier) |
+| Embarquer | Clic sur une case d’eau **~** — pas une plage |
+| Débarquer | Clic sur une terre ou une plage **↓** |
+| Pont | Case **=** (détroit seulement) |
 | Annuler l’ordre | Clic droit ou **Échap** |
-| Recruter | Clique une ville : 3 cartes de production en bas |
-| Construire | Clique une case libre : fonder une ville. Pont seulement sur un détroit |
-| Embarquer | Clique une case d’eau cyan — pas une plage |
-| Débarquer | Clique une terre ou une plage verte depuis le navire |
-| Fortifier | Seul bouton d’unité, dans le panneau du bas |
-| Recherche tech | Pastille en haut à droite |
-| Fin de tour | Bouton vert bas-droite, ou **Espace** |
+| Recruter | Clique une ville : S spadassin, A arbalète, C cavalerie |
+| Construire | Case libre : fonder une ville |
+| Fortifier | Bouton dans le panneau du bas |
+| Recherche tech | Bouton en haut à droite |
+| Fin de tour | Le bouton clignote quand plus aucune unité n’a de PM, ou **Espace** |
 | Pause / réglages | **Échap** → volume, vitesse IA, difficulté |
 | Sauvegarde manuelle | **Ctrl+S** ou menu pause |
-| Charger | Menu principal → « Charger Partie » |
+| Charger | Menu principal → « Charger une partie » |
 
 En **solo**, le brouillard reste toujours celui du **Royaume Rouge** (pas la vision des tours IA).
 
-L’interface suit le modèle Civ : la carte est plein écran. Une barre du haut montre l’or et le tour, le panneau du bas n’affiche **que** les actions de la case cliquée, et **Fin de tour** est le gros bouton vert.
+L’interface vise un look *Civilization* précoce : bois, or, parchemin. La carte est plein écran. Les unités portent une lettre (**S / A / C**) plus un effectif. Chaque royaume a un **motif** (hachures), pas seulement une couleur.
 
 ## Mer
 
-Les plages se **marchent à pied**. On n’embarque qu’en cliquant une case d’**eau** (cyan). Un navire reste sur l’eau ou un pont ; il débarque sur une terre ou une plage. Un pont ne se construit que sur un **détroit** (eau coincée entre deux terres), pas le long d’une plage.
+Les plages se **marchent à pied**. On n’embarque qu’en cliquant une case d’**eau**. Un navire reste sur l’eau ou un pont ; il débarque sur une terre ou une plage. Un pont ne se construit que sur un **détroit** (eau coincée entre deux terres), pas le long d’une plage.
 
 ## Traits des royaumes
 
@@ -97,6 +100,7 @@ Sans fichiers, le jeu utilise des formes et couleurs générées.
 | `pause_menu.py` | Menu pause et réglages |
 | `settings.py` | Volume, vitesse IA, difficulté |
 | `constants.py` | Équilibrage et énumérations |
+| `theme.py` | Bois, or, parchemin, polices, hachures |
 | `cell.py`, `army.py`, `player.py` | Modèle de jeu |
 | `ui.py`, `menu.py` | Interface |
 

@@ -3,27 +3,28 @@
 import pygame
 from constants import WINDOW_WIDTH, WINDOW_HEIGHT
 from settings import load_settings, save_settings
+from theme import INK, INK_SOFT, draw_panel, load_font, wrap_text
 
 TUTORIAL_STEPS = [
     (
-        "Bienvenue dans The World Is Ours",
-        "Conquiers les capitales ennemies ou sois le dernier royaume debout.",
+        "Ton palais est fondé",
+        "Gagne en prenant toutes les capitales, ou en étant le dernier royaume.",
     ),
     (
-        "Déplacer",
-        "Clique une unité : les cases possibles s'affichent. Clique une case bleue pour avancer.",
+        "Tes unités",
+        "S spadassin, A arbalète, C cavalerie. Clique une unité, puis une case + pour avancer.",
     ),
     (
-        "Villes et production",
-        "Clique une ville pour recruter. Le panneau du bas ne montre que ce que cette case peut faire.",
+        "La boucle du tour",
+        "N : unité suivante. Quand plus aucune n'a de mouvement, Fin de tour clignote. Espace force la fin.",
     ),
     (
-        "Mer",
-        "La plage se marche à pied. Clique l'eau cyan pour embarquer, le vert pour débarquer.",
+        "Villes",
+        "Clique une ville pour produire une unité. Une seule production par ville et par tour.",
     ),
     (
-        "Fin de tour",
-        "Quand tes unités ont bougé : bouton vert en bas à droite, ou Espace. Échap : pause.",
+        "Lire la carte",
+        "Chaque royaume a un motif (pas seulement une couleur). + marcher, X attaquer, ~ mer, * tir.",
     ),
 ]
 
@@ -62,23 +63,29 @@ class Tutorial:
         if not self.active:
             return
         overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 170))
+        overlay.fill((40, 24, 12, 170))
         surface.blit(overlay, (0, 0))
-        panel_w = min(640, WINDOW_WIDTH - 40)
-        panel_h = 200
+        panel_w = min(620, WINDOW_WIDTH - 40)
+        panel_h = 250
         panel_x = (WINDOW_WIDTH - panel_w) // 2
         panel_y = WINDOW_HEIGHT // 2 - panel_h // 2
-        pygame.draw.rect(surface, (35, 38, 48), (panel_x, panel_y, panel_w, panel_h), border_radius=12)
-        pygame.draw.rect(surface, (90, 100, 120), (panel_x, panel_y, panel_w, panel_h), 2, border_radius=12)
-        title_font = pygame.font.Font(None, 34)
-        body_font = pygame.font.Font(None, 24)
-        hint_font = pygame.font.Font(None, 22)
+        rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+        draw_panel(surface, rect)
+        title_font = load_font(28, bold=True)
+        body_font = load_font(20)
+        hint_font = load_font(16)
         title, body = TUTORIAL_STEPS[self.step]
-        surface.blit(title_font.render(title, True, (255, 220, 120)), title_font.render(title, True, (255, 220, 120)).get_rect(center=(WINDOW_WIDTH // 2, panel_y + 42)))
-        surface.blit(body_font.render(body, True, (230, 230, 230)), body_font.render(body, True, (230, 230, 230)).get_rect(center=(WINDOW_WIDTH // 2, panel_y + 100)))
+        title_surf = title_font.render(title, True, (120, 48, 28))
+        surface.blit(title_surf, title_surf.get_rect(center=(WINDOW_WIDTH // 2, panel_y + 46)))
+        wrapped = wrap_text(body_font, body, panel_w - 48)
+        text_y = panel_y + 88
+        for line in wrapped:
+            line_surf = body_font.render(line, True, INK)
+            surface.blit(line_surf, line_surf.get_rect(center=(WINDOW_WIDTH // 2, text_y)))
+            text_y += 26
         hint = hint_font.render(
-            f"Étape {self.step + 1}/{len(TUTORIAL_STEPS)} — Clic ou Entrée pour continuer",
+            f"{self.step + 1}/{len(TUTORIAL_STEPS)}  —  Clic ou Entrée",
             True,
-            (180, 180, 190),
+            INK_SOFT,
         )
-        surface.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, panel_y + panel_h - 28)))
+        surface.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, panel_y + panel_h - 32)))

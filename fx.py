@@ -26,9 +26,11 @@ class Effects:
         self._title_font = None
 
     def _fonts(self):
+        from theme import load_font
+
         if self._font is None:
-            self._font = pygame.font.Font(None, 22)
-            self._title_font = pygame.font.Font(None, 36)
+            self._font = load_font(18)
+            self._title_font = load_font(28, bold=True)
         return self._font, self._title_font
 
     def is_busy(self):
@@ -108,14 +110,14 @@ class Effects:
             py = MAP_ORIGIN_Y + (start[1] + (end[1] - start[1]) * k) * CELL_SIZE
             draw_army_at(screen, int(px), int(py), self.walk["army"])
         if self.banner:
-            alpha = 210
-            if self.banner["ttl"] < 16:
-                alpha = max(30, int(210 * self.banner["ttl"] / 16))
-            panel = pygame.Surface((MAP_PIXEL_WIDTH, 56), pygame.SRCALPHA)
-            panel.fill((12, 14, 20, alpha))
-            screen.blit(panel, (0, WINDOW_HEIGHT // 2 - 70))
-            text = title_font.render(self.banner["text"], True, (255, 230, 140))
-            screen.blit(text, text.get_rect(center=(MAP_PIXEL_WIDTH // 2, WINDOW_HEIGHT // 2 - 42)))
+            from theme import GOLD_BRIGHT, PARCHMENT, WOOD, draw_bevel_rect
+
+            width = MAP_PIXEL_WIDTH
+            rect = pygame.Rect(40, WINDOW_HEIGHT // 2 - 70, width - 80, 56)
+            draw_bevel_rect(screen, rect, WOOD, GOLD_BRIGHT, (40, 24, 12), 2)
+            pygame.draw.rect(screen, PARCHMENT, rect.inflate(-8, -8))
+            text = title_font.render(self.banner["text"], True, (48, 28, 14))
+            screen.blit(text, text.get_rect(center=rect.center))
         for floater in self.floaters:
             fade = max(40, int(255 * floater["ttl"] / floater["max_ttl"]))
             surf = font.render(floater["text"], True, floater["color"])
@@ -124,23 +126,25 @@ class Effects:
 
 
 def draw_end_recap(screen, game):
+    from theme import GOLD, INK, PARCHMENT, draw_panel, load_font, wrap_text
+
     overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
-    overlay.fill((8, 10, 14, 210))
+    overlay.fill((40, 24, 12, 200))
     screen.blit(overlay, (0, 0))
 
-    panel_w, panel_h = 520, 340
+    panel_w, panel_h = min(560, WINDOW_WIDTH - 40), 380
     panel_x = (WINDOW_WIDTH - panel_w) // 2
     panel_y = (WINDOW_HEIGHT - panel_h) // 2
-    pygame.draw.rect(screen, (28, 32, 42), (panel_x, panel_y, panel_w, panel_h), border_radius=14)
-    pygame.draw.rect(screen, (210, 180, 90), (panel_x, panel_y, panel_w, panel_h), 2, border_radius=14)
+    rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+    draw_panel(screen, rect)
 
-    title_font = pygame.font.Font(None, 40)
-    body = pygame.font.Font(None, 26)
-    small = pygame.font.Font(None, 22)
+    title_font = load_font(32, bold=True)
+    body = load_font(20)
+    small = load_font(18)
 
     title = game.game_over_message or "Partie terminée"
-    title_surf = title_font.render(title, True, (255, 220, 120))
-    screen.blit(title_surf, title_surf.get_rect(center=(WINDOW_WIDTH // 2, panel_y + 42)))
+    title_surf = title_font.render(title, True, (120, 48, 28))
+    screen.blit(title_surf, title_surf.get_rect(center=(WINDOW_WIDTH // 2, panel_y + 48)))
 
     lines = [f"Tours : {game.turn_number}"]
     territories = {}
@@ -159,10 +163,11 @@ def draw_end_recap(screen, game):
         if best[1] > 0:
             lines.append(f"Or pillé : {COUNTRY_NAMES[best[0]]} +{best[1]}")
 
-    y = panel_y + 100
+    y = panel_y + 110
     for line in lines:
-        surf = body.render(line, True, (230, 230, 230))
-        screen.blit(surf, surf.get_rect(center=(WINDOW_WIDTH // 2, y)))
-        y += 32
-    hint = small.render("Clique pour retourner au menu", True, (180, 180, 190))
-    screen.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, panel_y + panel_h - 36)))
+        for wrapped in wrap_text(body, line, panel_w - 48):
+            surf = body.render(wrapped, True, INK)
+            screen.blit(surf, surf.get_rect(center=(WINDOW_WIDTH // 2, y)))
+            y += 28
+    hint = small.render("Clic ou Entrée : retour au menu", True, (90, 64, 36))
+    screen.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, panel_y + panel_h - 40)))

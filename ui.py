@@ -1,26 +1,39 @@
 import pygame
 from constants import *
 from menu import Button
+from theme import (
+    CREAM,
+    GOLD,
+    GOLD_BRIGHT,
+    INK,
+    INK_SOFT,
+    PARCHMENT,
+    WOOD,
+    WOOD_DARK,
+    WOOD_LIGHT,
+    draw_bevel_rect,
+    draw_panel,
+    load_font,
+)
 
 
 class UI:
     def __init__(self, screen):
         self.screen = screen
-        self.font_title = pygame.font.Font(None, 28)
-        self.font_normal = pygame.font.Font(None, 22)
-        self.font_small = pygame.font.Font(None, 18)
-        self.font_tiny = pygame.font.Font(None, 16)
+        self.font_title = load_font(24, bold=True)
+        self.font_normal = load_font(20, bold=True)
+        self.font_small = load_font(18)
+        self.font_tiny = load_font(16)
         self.context_rect = pygame.Rect(0, 0, 0, 0)
-
-        self.btn_end_turn = Button(WINDOW_WIDTH - 206, WINDOW_HEIGHT - 64, 194, 50, "Fin de tour", (39, 174, 96), (46, 204, 113))
-        self.btn_research = Button(WINDOW_WIDTH - 248, 8, 236, 36, "Tech", (70, 90, 130), (90, 115, 160))
-        self.btn_fortify = Button(0, 0, 120, 32, "Fortifier", (80, 110, 90), (96, 130, 108))
-        self.btn_disembark = Button(0, 0, 140, 32, "Débarquer ici", (40, 110, 90), (55, 140, 110))
-        self.btn_build_city = Button(0, 0, 200, 32, "Fonder une ville", (39, 174, 96), (46, 204, 113))
-        self.btn_build_bridge = Button(0, 0, 160, 32, "Construire un pont", (127, 101, 65), (148, 122, 86))
-        self.btn_recruit_swordsman = Button(0, 0, 130, 32, "Spadassin", (41, 128, 185), (52, 152, 219))
-        self.btn_recruit_crossbowman = Button(0, 0, 140, 32, "Arbalétrier", (142, 68, 173), (155, 89, 182))
-        self.btn_recruit_cavalry = Button(0, 0, 130, 32, "Cavalerie", (230, 126, 34), (243, 156, 18))
+        self.btn_end_turn = Button(WINDOW_WIDTH - 214, WINDOW_HEIGHT - 68, 202, 54, "Fin de tour")
+        self.btn_research = Button(WINDOW_WIDTH - 250, 8, 238, 32, "Tech")
+        self.btn_fortify = Button(0, 0, 120, 34, "Fortifier")
+        self.btn_disembark = Button(0, 0, 140, 34, "Débarquer ici")
+        self.btn_build_city = Button(0, 0, 200, 34, "Fonder une ville")
+        self.btn_build_bridge = Button(0, 0, 160, 34, "Pont")
+        self.btn_recruit_swordsman = Button(0, 0, 130, 34, "Spadassin")
+        self.btn_recruit_crossbowman = Button(0, 0, 140, 34, "Arbalétrier")
+        self.btn_recruit_cavalry = Button(0, 0, 130, 34, "Cavalerie")
 
     def _place(self, button, x, y, w=None):
         if w is not None:
@@ -43,12 +56,13 @@ class UI:
             "already_recruited": False,
             "can_build_city": False,
             "can_build_bridge": False,
-            "hint": "Clique une unité pour la déplacer, ou une ville pour recruter.",
+            "idle": 0,
+            "hint": "N : unité suivante.  Clique une ville pour produire.",
         }
         cell = game.selected_cell
+        info["idle"] = game.count_idle_armies(info["country"]) if info["human"] else 0
         if not cell:
             return info
-        player = info["player"]
         own_tile = cell.country == info["country"]
         if cell.army:
             info["army"] = cell.army
@@ -82,25 +96,26 @@ class UI:
         ):
             info["can_build_bridge"] = True
         if info["own_army"]:
-            bits = []
+            letter = UNIT_LETTERS.get(cell.army.unit_type, "?")
+            bits = [f"{letter} = {UNIT_NAMES[cell.army.unit_type]}"]
             if cell.army.embarked:
-                bits.append("Vert : débarquer")
+                bits.append("Case verte : débarquer")
             else:
-                bits.append("Bleu : avancer")
-                bits.append("Rouge : attaquer")
+                bits.append("+ avancer   X attaquer")
                 if cell.army.unit_type == UnitType.CROSSBOWMAN:
-                    bits.append("Violet : tirer")
+                    bits.append("* tirer")
                 if game.get_embark_targets(cell):
-                    bits.append("Cyan : embarquer")
-            info["hint"] = "  ·  ".join(bits)
+                    bits.append("~ embarquer (eau)")
+            info["hint"] = "   ".join(bits)
         elif info["can_recruit"]:
-            info["hint"] = "Choisis une unité à recruter dans cette ville."
+            info["hint"] = "Production de la ville : une unité par tour."
         elif info["already_recruited"]:
             info["hint"] = "Cette ville a déjà produit ce tour."
         elif info["can_build_city"]:
             info["hint"] = "Case libre : tu peux fonder une ville."
         else:
-            info["hint"] = f"{TERRAIN_FULL_NAMES[cell.terrain]}  ·  {COUNTRY_NAMES[cell.country]}"
+            owner = COUNTRY_SHORT.get(cell.country, "—")
+            info["hint"] = f"{TERRAIN_FULL_NAMES[cell.terrain]}  ·  {owner}"
         return info
 
     def layout(self, game):
@@ -108,20 +123,27 @@ class UI:
         player = ctx["player"]
         next_tech = player.get_next_tech()
         if next_tech:
-            self.btn_research.text = f"{next_tech['name']}  {next_tech['cost']}"
+            self.btn_research.text = f"{next_tech['name']}  {next_tech['cost']} or"
         else:
             self.btn_research.text = "Techs terminées"
-        self.btn_research.rect.x = WINDOW_WIDTH - 218
-        self.btn_research.rect.y = 8
-        self.btn_research.rect.width = 210
+        self.btn_research.rect.x = WINDOW_WIDTH - 246
+        self.btn_research.rect.y = 6
+        self.btn_research.rect.width = 234
+        self.btn_research.rect.height = 28
 
-        idle = game.count_idle_armies(ctx["country"]) if ctx["human"] else 0
+        idle = ctx["idle"]
         if not ctx["human"]:
-            self.btn_end_turn.text = "IA en cours..."
+            self.btn_end_turn.text = "Tour de l'IA…"
+            self.btn_end_turn.color = WOOD
         elif idle:
-            self.btn_end_turn.text = f"Fin de tour ({idle})"
+            self.btn_end_turn.text = f"Unité suivante  ({idle})"
+            self.btn_end_turn.color = WOOD
+            self.btn_end_turn.hover_color = WOOD_LIGHT
         else:
+            pulse = (pygame.time.get_ticks() // 420) % 2 == 0
             self.btn_end_turn.text = "Fin de tour"
+            self.btn_end_turn.color = (140, 92, 28) if pulse else WOOD_LIGHT
+            self.btn_end_turn.hover_color = GOLD
 
         buttons = []
         if ctx["can_fortify"]:
@@ -129,9 +151,9 @@ class UI:
         if ctx["can_beach_land"]:
             buttons.append(self.btn_disembark)
         if ctx["can_recruit"]:
-            self.btn_recruit_swordsman.text = f"Spadassin  {player.unit_cost(UnitType.SWORDSMAN)}"
-            self.btn_recruit_crossbowman.text = f"Arbalétrier  {player.unit_cost(UnitType.CROSSBOWMAN)}"
-            self.btn_recruit_cavalry.text = f"Cavalerie  {player.unit_cost(UnitType.CAVALRY)}"
+            self.btn_recruit_swordsman.text = f"S  Spadassin  {player.unit_cost(UnitType.SWORDSMAN)}"
+            self.btn_recruit_crossbowman.text = f"A  Arbalète  {player.unit_cost(UnitType.CROSSBOWMAN)}"
+            self.btn_recruit_cavalry.text = f"C  Cavalerie  {player.unit_cost(UnitType.CAVALRY)}"
             buttons.extend(
                 [self.btn_recruit_swordsman, self.btn_recruit_crossbowman, self.btn_recruit_cavalry]
             )
@@ -142,20 +164,17 @@ class UI:
             self.btn_build_bridge.text = f"Pont  {player.bridge_cost()}"
             buttons.append(self.btn_build_bridge)
 
-        extra = 36 if len(buttons) > 3 else 0
-        if not ctx["cell"]:
-            panel_h = 54
-        else:
-            panel_h = 88 + extra
-        panel_w = min(460, WINDOW_WIDTH - 226)
-        self.context_rect = pygame.Rect(10, WINDOW_HEIGHT - panel_h - 10, panel_w, panel_h)
-        x = self.context_rect.x + 12
-        y = self.context_rect.bottom - 42
+        extra = 38 if len(buttons) > 3 else 0
+        panel_h = 58 if not ctx["cell"] else 96 + extra
+        panel_w = min(500, WINDOW_WIDTH - 230)
+        self.context_rect = pygame.Rect(8, WINDOW_HEIGHT - panel_h - 8, panel_w, panel_h)
+        x = self.context_rect.x + 14
+        y = self.context_rect.bottom - 44
         for button in buttons:
-            width = max(118, self.font_small.size(button.text)[0] + 18)
+            width = max(128, self.font_small.size(button.text)[0] + 20)
             if x + width > self.context_rect.right - 8:
-                x = self.context_rect.x + 12
-                y -= 36
+                x = self.context_rect.x + 14
+                y -= 38
             x = self._place(button, x, y, width)
         return ctx, buttons
 
@@ -177,36 +196,34 @@ class UI:
         self.btn_end_turn.draw(self.screen, self.font_normal)
 
     def _draw_top_bar(self, game, ctx):
-        pygame.draw.rect(self.screen, (18, 20, 26), (0, 0, WINDOW_WIDTH, HUD_TOP))
-        pygame.draw.line(self.screen, (70, 74, 84), (0, HUD_TOP - 1), (WINDOW_WIDTH, HUD_TOP - 1), 1)
+        bar = pygame.Rect(0, 0, WINDOW_WIDTH, HUD_TOP)
+        draw_bevel_rect(self.screen, bar, WOOD, GOLD_BRIGHT, WOOD_DARK, 2)
+        pygame.draw.line(self.screen, GOLD, (0, HUD_TOP - 2), (WINDOW_WIDTH, HUD_TOP - 2), 2)
         country = ctx["country"]
         player = ctx["player"]
-        pygame.draw.circle(self.screen, COUNTRY_COLORS[country], (16, HUD_TOP // 2), 8)
-        name = COUNTRY_NAMES[country]
-        self.screen.blit(self.font_small.render(name, True, (235, 235, 235)), (28, 6))
+        pygame.draw.circle(self.screen, COUNTRY_COLORS[country], (18, 22), 9)
+        pygame.draw.circle(self.screen, GOLD, (18, 22), 9, 1)
+        self.screen.blit(self.font_normal.render(COUNTRY_SHORT[country], True, CREAM), (32, 6))
         trait = player.trait_info()
         if trait:
-            self.screen.blit(self.font_tiny.render(trait["name"], True, (200, 190, 140)), (28, 28))
+            self.screen.blit(self.font_tiny.render(trait["name"], True, GOLD_BRIGHT), (32, 28))
+        self.screen.blit(self.font_tiny.render("Prends toutes les capitales, ou reste le dernier.", True, PARCHMENT), (32, 48))
 
-        gold = self.font_normal.render(f"{player.gold}", True, (255, 210, 80))
-        self.screen.blit(gold, (168, 6))
-        self.screen.blit(self.font_tiny.render("or", True, (255, 210, 80)), (168 + gold.get_width() + 4, 10))
-        yield_line = self.font_tiny.render(
-            f"+{game.last_income}  -{game.last_upkeep}", True, (170, 185, 170)
+        gold = self.font_title.render(str(player.gold), True, GOLD_BRIGHT)
+        self.screen.blit(gold, (168, 4))
+        self.screen.blit(self.font_tiny.render("or", True, GOLD), (168 + gold.get_width() + 6, 10))
+        self.screen.blit(
+            self.font_tiny.render(f"+{game.last_income}   −{game.last_upkeep}", True, PARCHMENT),
+            (168, 32),
         )
-        self.screen.blit(yield_line, (168, 28))
 
         active = game.current_player_country
         status = f"Tour {game.turn_number}"
         if game.game_mode == "solo" and active != country:
-            status += "  IA"
-        elif getattr(game, "fx", None) and game.fx.is_busy():
-            status += "  …"
-        self.screen.blit(self.font_small.render(status, True, (220, 220, 225)), (268, 16))
-        self.btn_research.rect.width = 210
-        self.btn_research.rect.x = WINDOW_WIDTH - 218
-        self.btn_research.rect.y = 8
-        self.btn_research.draw(self.screen, self.font_small)
+            status += "  ·  IA"
+        self.screen.blit(self.font_small.render(status, True, CREAM), (300, 10))
+        self.screen.blit(self.font_tiny.render("N unité   Espace fin de tour   Échap pause", True, PARCHMENT), (300, 34))
+        self.btn_research.draw(self.screen, self.font_tiny)
 
     def _draw_city_banners(self, game):
         viewer = game.get_viewer_country()
@@ -218,55 +235,59 @@ class UI:
                 if (x, y) not in game.visibility and viewer not in cell.discovered_by:
                     continue
                 sx, sy = cell_screen_pos(x, y)
-                label = "Capitale" if cell.is_capital else "Ville"
-                color = COUNTRY_COLORS.get(cell.country, (200, 200, 200))
-                surf = self.font_tiny.render(label, True, (20, 20, 24))
-                pad = 4
-                rect = pygame.Rect(0, 0, surf.get_width() + pad * 2, surf.get_height() + 2)
-                rect.midbottom = (sx + CELL_SIZE // 2, sy - 1)
+                name = COUNTRY_SHORT.get(cell.country, "?")
+                label = f"★ {name}" if cell.is_capital else name
+                surf = self.font_tiny.render(label, True, INK)
+                pad = 5
+                rect = pygame.Rect(0, 0, surf.get_width() + pad * 2, surf.get_height() + 4)
+                rect.midbottom = (sx + CELL_SIZE // 2, sy - 2)
                 if rect.top < HUD_TOP:
                     rect.top = sy + CELL_SIZE + 1
-                pygame.draw.rect(self.screen, color, rect, border_radius=3)
-                self.screen.blit(surf, (rect.x + pad, rect.y + 1))
+                pygame.draw.rect(self.screen, PARCHMENT, rect)
+                pygame.draw.rect(self.screen, COUNTRY_COLORS.get(cell.country, GOLD), rect, 1)
+                self.screen.blit(surf, (rect.x + pad, rect.y + 2))
 
     def _draw_event_log(self, game):
-        y = HUD_TOP + 8
+        y = HUD_TOP + 6
         for msg in game.event_log[-3:]:
-            text = self.font_tiny.render(msg[:54], True, (230, 230, 230))
-            bg = pygame.Surface((text.get_width() + 10, text.get_height() + 4), pygame.SRCALPHA)
-            bg.fill((10, 12, 16, 160))
+            text = self.font_tiny.render(msg[:52], True, INK)
+            bg = pygame.Surface((text.get_width() + 12, text.get_height() + 6), pygame.SRCALPHA)
+            bg.fill((236, 220, 184, 210))
             self.screen.blit(bg, (8, y))
-            self.screen.blit(text, (13, y + 2))
-            y += 18
+            self.screen.blit(text, (14, y + 3))
+            y += 20
 
     def _draw_context_panel(self, game, ctx, buttons):
-        pygame.draw.rect(self.screen, (22, 24, 32), self.context_rect, border_radius=10)
-        pygame.draw.rect(self.screen, (80, 86, 98), self.context_rect, 1, border_radius=10)
-        x = self.context_rect.x + 12
+        draw_bevel_rect(self.screen, self.context_rect, WOOD, GOLD_BRIGHT, WOOD_DARK, 2)
+        inner = self.context_rect.inflate(-6, -6)
+        pygame.draw.rect(self.screen, PARCHMENT, inner)
+        pygame.draw.rect(self.screen, GOLD, inner, 1)
+        x = self.context_rect.x + 14
         y = self.context_rect.y + 8
         cell = ctx["cell"]
         if ctx["army"]:
             army = ctx["army"]
             ship = "  navire" if army.embarked else ""
-            title = f"{UNIT_NAMES[army.unit_type]}{ship}  ×{army.count}"
-            self.screen.blit(self.font_normal.render(title, True, (255, 230, 140)), (x, y))
-            pm = f"PM {army.movement_left}/{army.movement_range(game.players.get(army.country))}"
-            self.screen.blit(self.font_small.render(pm, True, (200, 200, 205)), (x + 250, y + 4))
+            letter = UNIT_LETTERS.get(army.unit_type, "?")
+            title = f"{letter}  {UNIT_NAMES[army.unit_type]}{ship}  ×{army.count}"
+            self.screen.blit(self.font_normal.render(title, True, INK), (x, y))
+            pm = f"mouvement {army.movement_left}/{army.movement_range(game.players.get(army.country))}"
+            self.screen.blit(self.font_small.render(pm, True, INK_SOFT), (x + 268, y + 2))
         elif cell and (cell.is_capital or cell.is_city):
             kind = "Capitale" if cell.is_capital else "Ville"
-            self.screen.blit(self.font_normal.render(kind, True, (255, 230, 140)), (x, y))
+            self.screen.blit(self.font_normal.render(kind, True, INK), (x, y))
         elif cell:
             self.screen.blit(
-                self.font_normal.render(TERRAIN_FULL_NAMES[cell.terrain], True, (230, 230, 230)),
+                self.font_normal.render(TERRAIN_FULL_NAMES[cell.terrain], True, INK),
                 (x, y),
             )
         else:
-            self.screen.blit(self.font_normal.render("Aucune sélection", True, (200, 200, 205)), (x, y))
-        self.screen.blit(self.font_tiny.render(ctx["hint"], True, (170, 175, 185)), (x, y + 24))
+            self.screen.blit(self.font_normal.render("Aucune sélection", True, INK_SOFT), (x, y))
+        self.screen.blit(self.font_tiny.render(ctx["hint"], True, INK_SOFT), (x, y + 26))
         if ctx["already_recruited"] and not ctx["can_recruit"]:
             self.screen.blit(
-                self.font_tiny.render("Production déjà utilisée", True, (180, 140, 140)),
-                (x, y + 40),
+                self.font_tiny.render("Production déjà utilisée", True, (140, 48, 36)),
+                (x, y + 44),
             )
         for button in buttons:
             button.draw(self.screen, self.font_small)
@@ -274,12 +295,12 @@ class UI:
     def handle_event(self, event, game):
         ctx, buttons = self.layout(game)
         if self.btn_end_turn.handle_event(event):
+            if ctx["human"] and ctx["idle"]:
+                return "next_unit"
             return "end_turn"
         if ctx["human"] and self.btn_research.handle_event(event):
             return "research_next"
-
-        visible = set(id(button) for button in buttons)
-        if ctx["can_fortify"] and id(self.btn_fortify) in visible and self.btn_fortify.handle_event(event):
+        if ctx["can_fortify"] and self.btn_fortify.handle_event(event):
             return "fortify"
         if ctx["can_beach_land"] and self.btn_disembark.handle_event(event):
             return "disembark_mode"
@@ -294,7 +315,6 @@ class UI:
                 return ("recruit", UnitType.CROSSBOWMAN)
             if self.btn_recruit_cavalry.handle_event(event):
                 return ("recruit", UnitType.CAVALRY)
-
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.blocks_map(event.pos):
             return "hud_click"
         return None

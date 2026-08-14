@@ -129,6 +129,7 @@ class Game:
         self.audio.play_music("game")
         self.fx.show_banner(f"Tour de {COUNTRY_NAMES[self.current_player_country]}")
         self.log_event("Nouvelle carte générée")
+        self.select_next_idle_army()
     
     def recruit_unit(self, unit_type):
         """Recrute une unité sur la case sélectionnée"""
@@ -660,35 +661,31 @@ class Game:
         if animate is None:
             animate = self.is_human_turn()
         dest = (to_cell.x, to_cell.y)
+
+        def play(path, action):
+            def wrapped():
+                action()
+                if animate:
+                    self.maybe_advance_after_orders()
+
+            if animate:
+                self.fx.start_walk(from_cell, path, from_cell.army, wrapped)
+            else:
+                wrapped()
+
         if dest in self.get_embark_targets(from_cell) and not from_cell.army.embarked:
             path = [] if from_cell is to_cell else [to_cell]
-            action = lambda: self.embark_army(from_cell, to_cell)
-            if animate:
-                self.fx.start_walk(from_cell, path, from_cell.army, action)
-            else:
-                action()
+            play(path, lambda: self.embark_army(from_cell, to_cell))
             return
         if from_cell.army.embarked and dest in self.get_disembark_targets(from_cell):
             path = [] if from_cell is to_cell else [to_cell]
-            action = lambda: self.disembark_army(from_cell, to_cell)
-            if animate:
-                self.fx.start_walk(from_cell, path, from_cell.army, action)
-            else:
-                action()
+            play(path, lambda: self.disembark_army(from_cell, to_cell))
             return
         path_cells = self.find_path(from_cell, to_cell, from_cell.army.movement_left, from_cell.army)
         if not path_cells:
             self.log_event("Aucun chemin valide vers cette case")
             return
-        army = from_cell.army
-
-        def finish():
-            self.move_army(from_cell, to_cell)
-
-        if animate:
-            self.fx.start_walk(from_cell, path_cells, army, finish)
-        else:
-            finish()
+        play(path_cells, lambda: self.move_army(from_cell, to_cell))
 
 
     def apply_bridge_wear(self, path_cells):
@@ -1117,6 +1114,42 @@ class Game:
                     idle += 1
         return idle
 
+    def idle_army_cells(self, country):
+        cells = []
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = self.grid[x][y]
+                if cell.army and cell.army.country == country and cell.army.movement_left > 0:
+                    cells.append(cell)
+        return cells
+
+    def select_next_idle_army(self):
+        country = self.current_player_country
+        idle = self.idle_army_cells(country)
+        if not idle:
+            self.clear_order_modes()
+            return False
+        current = self.selected_cell
+        nxt = idle[0]
+        if current in idle:
+            nxt = idle[(idle.index(current) + 1) % len(idle)]
+        if self.selected_cell:
+            self.selected_cell.is_selected = False
+        self.selected_cell = nxt
+        nxt.is_selected = True
+        self.select_army_for_orders(nxt)
+        self.log_event(f"{UNIT_NAMES[nxt.army.unit_type]} : + avancer, X attaquer")
+        return True
+
+    def maybe_advance_after_orders(self):
+        if not self.is_human_turn():
+            return
+        cell = self.selected_cell
+        if cell and cell.army and cell.army.country == self.current_player_country and cell.army.movement_left > 0:
+            self.select_army_for_orders(cell)
+            return
+        self.select_next_idle_army()
+
     def get_ai_turn_delay_ms(self):
         return AI_SPEED_DELAYS_MS.get(self.settings.get("ai_speed", "normal"), 1000)
 
@@ -1172,6 +1205,7 @@ class Game:
             self.ai_turn_resume_at = pygame.time.get_ticks() + self.get_ai_turn_delay_ms()
         elif self.is_human_turn():
             self.audio.play("turn")
+            self.select_next_idle_army()
 
     def _autosave(self):
         if self.state != "playing":
@@ -1279,6 +1313,7 @@ class Game:
                             self.audio.play_music("game")
                         self.log_event("Partie chargée")
                         self.audio.play("click")
+                        self.select_next_idle_army()
                     else:
                         self.menu.load_error = "Pas de sauvegarde compatible (nouvelle partie requise)"
                         print(f"Aucune sauvegarde valide ({SAVE_PATH})")
@@ -1325,8 +1360,17 @@ class Game:
                         self.next_turn()
                     continue
 
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_n, pygame.K_TAB):
+                    if self.is_human_turn() and not self.fx.is_busy() and not self.is_game_over():
+                        self.select_next_idle_army()
+                    continue
+
                 if self.is_game_over():
                     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        self.state = "menu"
+                        self.menu = Menu(self.screen)
+                        self.audio.play_music("menu")
+                    elif event.type == pygame.KEYDOWN:
                         self.state = "menu"
                         self.menu = Menu(self.screen)
                         self.audio.play_music("menu")
@@ -1346,6 +1390,9 @@ class Game:
                 if ui_action == "end_turn":
                     self.next_turn()
                     continue
+                elif ui_action == "next_unit":
+                    self.select_next_idle_army()
+                    continue
                 elif ui_action == "build_city":
                     self.build_city()
                     continue
@@ -1362,6 +1409,7 @@ class Game:
                     continue
                 elif ui_action == "fortify":
                     self.fortify_selected_army()
+                    self.maybe_advance_after_orders()
                     continue
                 elif ui_action == "ranged_attack_mode":
                     if self.selected_cell and self.selected_cell.army:
@@ -1373,6 +1421,7 @@ class Game:
                     if cell and cell.army and (cell.x, cell.y) in self.get_disembark_targets(cell):
                         self.disembark_army(cell, cell)
                         self.clear_order_modes()
+                        self.maybe_advance_after_orders()
                     elif cell and cell.army:
                         self.select_army_for_orders(cell)
                         self.log_event("[MER] Clique une plage ou une terre verte")
@@ -1408,6 +1457,7 @@ class Game:
                         if self.selected_army_cell and dest in self.ranged_targets:
                             self.ranged_attack(self.selected_army_cell, clicked_cell)
                             self.clear_order_modes()
+                            self.maybe_advance_after_orders()
                             continue
 
                         order_tiles = self.move_targets | self.attack_targets | self.embark_targets | self.disembark_targets
@@ -1515,7 +1565,7 @@ class Game:
             return
 
         if self.state == "playing":
-            self.screen.fill((0, 0, 0))
+            self.screen.fill((42, 32, 22))
             self.compute_visibility()
             tick = pygame.time.get_ticks()
             hidden = self.fx.hidden_army_cells()
@@ -1533,7 +1583,7 @@ class Game:
                     else:
                         pygame.draw.rect(
                             self.screen,
-                            (0, 0, 0),
+                            (18, 14, 10),
                             (*cell_screen_pos(x, y), CELL_SIZE, CELL_SIZE),
                         )
 
@@ -1548,23 +1598,32 @@ class Game:
                         if (x, y) not in self.visibility:
                             continue
                         glow = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                        glow.fill((255, 230, 120, pulse_a))
+                        glow.fill((212, 168, 78, pulse_a))
                         self.screen.blit(glow, cell_screen_pos(x, y))
 
-            def blit_highlight(cells, color):
+            def blit_highlight(cells, color, mark):
+                from theme import load_font, CREAM
+
+                font = load_font(20, bold=True)
                 for hx, hy in cells:
                     if (hx, hy) not in self.visibility:
                         continue
                     highlight = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
                     highlight.fill(color)
-                    self.screen.blit(highlight, cell_screen_pos(hx, hy))
+                    pos = cell_screen_pos(hx, hy)
+                    self.screen.blit(highlight, pos)
+                    glyph = font.render(mark, True, CREAM)
+                    self.screen.blit(
+                        glyph,
+                        glyph.get_rect(center=(pos[0] + CELL_SIZE // 2, pos[1] + CELL_SIZE // 2)),
+                    )
 
-            blit_highlight(self.move_targets, (52, 152, 219, 70))
-            blit_highlight(self.attack_targets, (231, 76, 60, 85))
-            blit_highlight(self.bridge_targets, (200, 170, 110, 95))
-            blit_highlight(self.ranged_targets, (170, 110, 220, 105))
-            blit_highlight(self.embark_targets, (80, 150, 210, 100))
-            blit_highlight(self.disembark_targets, (80, 180, 110, 100))
+            blit_highlight(self.move_targets, (40, 90, 48, 90), "+")
+            blit_highlight(self.attack_targets, (160, 40, 32, 100), "X")
+            blit_highlight(self.bridge_targets, (180, 140, 60, 110), "=")
+            blit_highlight(self.ranged_targets, (120, 60, 150, 110), "*")
+            blit_highlight(self.embark_targets, (36, 90, 140, 110), "~")
+            blit_highlight(self.disembark_targets, (40, 120, 70, 110), "↓")
             for cell in self.preview_path_cells:
                 if (cell.x, cell.y) not in self.visibility:
                     continue
@@ -1579,9 +1638,9 @@ class Game:
                         continue
                     fog_tile = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
                     if self.get_viewer_country() in cell.discovered_by:
-                        fog_tile.fill((12, 14, 18, 220))
+                        fog_tile.fill((92, 72, 44, 150))
                     else:
-                        fog_tile.fill((0, 0, 0, 250))
+                        fog_tile.fill((28, 20, 12, 245))
                     self.screen.blit(fog_tile, cell_screen_pos(x, y))
 
             for animation in self.animations:
@@ -1636,30 +1695,41 @@ class Game:
         if (self.hovered_cell.x, self.hovered_cell.y) not in self.visibility:
             return
 
+        cell = self.hovered_cell
         lines = [
-            f"({self.hovered_cell.x},{self.hovered_cell.y})",
-            f"Terrain: {TERRAIN_FULL_NAMES[self.hovered_cell.terrain]}",
-            f"Pays: {COUNTRY_NAMES[self.hovered_cell.country]}",
+            f"{TERRAIN_FULL_NAMES[cell.terrain]}  ({cell.x},{cell.y})",
+            COUNTRY_NAMES[cell.country] if cell.country != Country.NONE else "Neutre",
         ]
-        if self.hovered_cell.terrain == TerrainType.BRIDGE:
-            lines.append(f"Pont HP: {self.hovered_cell.bridge_hp}")
-        if self.hovered_cell.army:
-            ship = " navire" if self.hovered_cell.army.embarked else ""
+        if cell.is_capital:
+            lines.append("Capitale")
+        elif cell.is_city:
+            lines.append("Ville")
+        bonus = TERRAIN_DEFENSE_BONUS.get(cell.terrain, 0)
+        if bonus:
+            lines.append(f"Défense terrain +{bonus}")
+        if cell.terrain == TerrainType.BRIDGE:
+            lines.append(f"Pont  {cell.bridge_hp} PV")
+        if cell.army:
+            army = cell.army
+            ship = " navire" if army.embarked else ""
+            letter = UNIT_LETTERS.get(army.unit_type, "?")
             lines.append(
-                f"{UNIT_NAMES[self.hovered_cell.army.unit_type]}{ship} x{self.hovered_cell.army.count} PM:{self.hovered_cell.army.movement_left}"
+                f"{letter} {UNIT_NAMES[army.unit_type]}{ship} ×{army.count}  mvt {army.movement_left}"
             )
+            stats = UNIT_STATS[army.unit_type]
+            lines.append(f"Att {stats['attack']}  Déf {stats['defense']}")
 
-        font = pygame.font.Font(None, 18)
-        width = max(font.size(line)[0] for line in lines) + 12
-        height = len(lines) * 18 + 10
-        tx = min(x + 12, MAP_PIXEL_WIDTH - width - 4)
-        ty = min(max(MAP_ORIGIN_Y + 4, y + 12), WINDOW_HEIGHT - height - 4)
-        bg = pygame.Surface((width, height), pygame.SRCALPHA)
-        bg.fill((20, 20, 24, 230))
-        self.screen.blit(bg, (tx, ty))
+        from theme import INK, PARCHMENT, GOLD, load_font, draw_bevel_rect
+
+        font = load_font(16)
+        width = max(font.size(line)[0] for line in lines) + 16
+        height = len(lines) * 18 + 12
+        tx = min(x + 14, MAP_PIXEL_WIDTH - width - 4)
+        ty = min(max(MAP_ORIGIN_Y + 4, y + 14), WINDOW_HEIGHT - height - 4)
+        rect = pygame.Rect(tx, ty, width, height)
+        draw_bevel_rect(self.screen, rect, PARCHMENT, GOLD, (48, 28, 14), 2)
         for idx, line in enumerate(lines):
-            text = font.render(line, True, (230, 230, 230))
-            self.screen.blit(text, (tx + 6, ty + 5 + idx * 18))
+            self.screen.blit(font.render(line, True, INK), (tx + 8, ty + 6 + idx * 18))
 
 if __name__ == "__main__":
     game = Game()
