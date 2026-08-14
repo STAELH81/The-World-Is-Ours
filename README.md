@@ -84,7 +84,6 @@ Place tes PNG dans `assets/` : le jeu les charge tout seul (plusieurs noms de fi
 - `assets/terrain/` — plaine, forêt, montagne, eau, plage, pont
 - `assets/units/` — spadassin, arbalétrier, cavalerie
 - `assets/buildings/` — **capitale**, **ville**
-- `assets/overlay/` — bordures de royaume (optionnel)
 
 Sans fichier, le jeu dessine le terrain à la main.
 
