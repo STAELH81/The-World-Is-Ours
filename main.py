@@ -1,3 +1,4 @@
+import math
 import pygame
 import sys
 from collections import deque
@@ -1108,6 +1109,20 @@ class Game:
             return True
         return self.current_player_country == SOLO_HUMAN_COUNTRY and not self.ai_turn_pending
 
+    def count_idle_armies(self, country):
+        idle = 0
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                army = self.grid[x][y].army
+                if army and army.country == country and army.movement_left > 0:
+                    idle += 1
+        return idle
+
+    def cell_has_adjacent_water(self, cell):
+        if not cell or cell.terrain == TerrainType.WATER:
+            return False
+        return any(neighbor.terrain == TerrainType.WATER for neighbor in self._neighbors(cell))
+
     def get_ai_turn_delay_ms(self):
         return AI_SPEED_DELAYS_MS.get(self.settings.get("ai_speed", "normal"), 1000)
 
@@ -1372,15 +1387,16 @@ class Game:
                     if self.selected_cell and self.selected_cell.army:
                         self.select_army_for_orders(self.selected_cell)
                     continue
-                elif ui_action and ui_action[0] == "recruit":
+                elif isinstance(ui_action, tuple) and ui_action[0] == "recruit":
                     self.recruit_unit(ui_action[1])
+                    continue
+                elif ui_action == "hud_click":
                     continue
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    x, y = event.pos
-                    cell_x = x // CELL_SIZE
-                    cell_y = y // CELL_SIZE
-                    if 0 <= cell_x < GRID_COLS and 0 <= cell_y < GRID_ROWS:
+                    coords = screen_to_cell(*event.pos)
+                    if coords:
+                        cell_x, cell_y = coords
                         if (cell_x, cell_y) not in self.visibility:
                             self.log_event("Zone non visible (brouillard)")
                             continue
@@ -1425,10 +1441,9 @@ class Game:
                             self.selected_cell.is_selected = True
                             self.log_event(f"Case ({cell_x},{cell_y}) {TERRAIN_FULL_NAMES[clicked_cell.terrain]}")
                 elif event.type == pygame.MOUSEMOTION:
-                    x, y = event.pos
-                    cell_x = x // CELL_SIZE
-                    cell_y = y // CELL_SIZE
-                    if 0 <= cell_x < GRID_COLS and 0 <= cell_y < GRID_ROWS:
+                    coords = screen_to_cell(*event.pos)
+                    if coords:
+                        cell_x, cell_y = coords
                         self.hovered_cell = self.grid[cell_x][cell_y]
                         dest = (cell_x, cell_y)
                         if self.selected_army_cell and self.selected_army_cell.army and dest in self.visibility:
@@ -1525,8 +1540,22 @@ class Game:
                         pygame.draw.rect(
                             self.screen,
                             (0, 0, 0),
-                            (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE),
+                            (*cell_screen_pos(x, y), CELL_SIZE, CELL_SIZE),
                         )
+
+            if self.is_human_turn():
+                pulse_a = 50 + int(40 * (0.5 + 0.5 * math.sin(tick / 180)))
+                viewer = self.get_ui_country()
+                for x in range(GRID_COLS):
+                    for y in range(GRID_ROWS):
+                        army = self.grid[x][y].army
+                        if not army or army.country != viewer or army.movement_left <= 0:
+                            continue
+                        if (x, y) not in self.visibility:
+                            continue
+                        glow = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+                        glow.fill((255, 230, 120, pulse_a))
+                        self.screen.blit(glow, cell_screen_pos(x, y))
 
             def blit_highlight(cells, color):
                 for hx, hy in cells:
@@ -1534,7 +1563,7 @@ class Game:
                         continue
                     highlight = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
                     highlight.fill(color)
-                    self.screen.blit(highlight, (hx * CELL_SIZE, hy * CELL_SIZE))
+                    self.screen.blit(highlight, cell_screen_pos(hx, hy))
 
             blit_highlight(self.move_targets, (52, 152, 219, 70))
             blit_highlight(self.attack_targets, (231, 76, 60, 85))
@@ -1547,7 +1576,7 @@ class Game:
                     continue
                 preview = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
                 preview.fill((255, 245, 120, 85))
-                self.screen.blit(preview, (cell.x * CELL_SIZE, cell.y * CELL_SIZE))
+                self.screen.blit(preview, cell_screen_pos(cell.x, cell.y))
 
             for x in range(GRID_COLS):
                 for y in range(GRID_ROWS):
@@ -1559,14 +1588,14 @@ class Game:
                         fog_tile.fill((12, 14, 18, 220))
                     else:
                         fog_tile.fill((0, 0, 0, 250))
-                    self.screen.blit(fog_tile, (x * CELL_SIZE, y * CELL_SIZE))
+                    self.screen.blit(fog_tile, cell_screen_pos(x, y))
 
             for animation in self.animations:
                 alpha = max(20, int(180 * (animation["ttl"] / animation["max_ttl"])))
                 for ax, ay in animation["cells"]:
                     pulse = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
                     pulse.fill((*animation["color"], alpha))
-                    self.screen.blit(pulse, (ax * CELL_SIZE, ay * CELL_SIZE))
+                    self.screen.blit(pulse, cell_screen_pos(ax, ay))
 
             self.fx.draw(self.screen)
             self.ui.draw(self)
@@ -1608,7 +1637,7 @@ class Game:
         if not self.hovered_cell:
             return
         x, y = pygame.mouse.get_pos()
-        if x >= GRID_COLS * CELL_SIZE:
+        if x >= MAP_PIXEL_WIDTH or y < MAP_ORIGIN_Y:
             return
         if (self.hovered_cell.x, self.hovered_cell.y) not in self.visibility:
             return
@@ -1629,8 +1658,8 @@ class Game:
         font = pygame.font.Font(None, 18)
         width = max(font.size(line)[0] for line in lines) + 12
         height = len(lines) * 18 + 10
-        tx = min(x + 12, GRID_COLS * CELL_SIZE - width - 4)
-        ty = min(y + 12, WINDOW_HEIGHT - height - 4)
+        tx = min(x + 12, MAP_PIXEL_WIDTH - width - 4)
+        ty = min(max(MAP_ORIGIN_Y + 4, y + 12), WINDOW_HEIGHT - height - 4)
         bg = pygame.Surface((width, height), pygame.SRCALPHA)
         bg.fill((20, 20, 24, 230))
         self.screen.blit(bg, (tx, ty))

@@ -4,9 +4,27 @@ GRID_COLS = 20
 GRID_ROWS = 30
 CELL_SIZE = 34
 
-UI_WIDTH = 380
-WINDOW_WIDTH = GRID_COLS * CELL_SIZE + UI_WIDTH
-WINDOW_HEIGHT = GRID_ROWS * CELL_SIZE
+HUD_TOP = 52
+MAP_ORIGIN_X = 0
+MAP_ORIGIN_Y = HUD_TOP
+MAP_PIXEL_WIDTH = GRID_COLS * CELL_SIZE
+MAP_PIXEL_HEIGHT = GRID_ROWS * CELL_SIZE
+WINDOW_WIDTH = MAP_PIXEL_WIDTH
+WINDOW_HEIGHT = HUD_TOP + MAP_PIXEL_HEIGHT
+
+
+def cell_screen_pos(x, y):
+    return MAP_ORIGIN_X + x * CELL_SIZE, MAP_ORIGIN_Y + y * CELL_SIZE
+
+
+def screen_to_cell(px, py):
+    if px < MAP_ORIGIN_X or py < MAP_ORIGIN_Y:
+        return None
+    cx = (px - MAP_ORIGIN_X) // CELL_SIZE
+    cy = (py - MAP_ORIGIN_Y) // CELL_SIZE
+    if 0 <= cx < GRID_COLS and 0 <= cy < GRID_ROWS:
+        return int(cx), int(cy)
+    return None
 
 
 class TerrainType(Enum):

@@ -7,8 +7,12 @@ from constants import (
     Country,
     GRID_COLS,
     GRID_ROWS,
+    MAP_ORIGIN_X,
+    MAP_ORIGIN_Y,
+    MAP_PIXEL_WIDTH,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
+    cell_screen_pos,
 )
 from cell import draw_army_at
 
@@ -57,8 +61,8 @@ class Effects:
     def float_text(self, cell_x, cell_y, text, color, ttl=48):
         self.floaters.append(
             {
-                "px": cell_x * CELL_SIZE + CELL_SIZE // 2,
-                "py": cell_y * CELL_SIZE + 8,
+                "px": MAP_ORIGIN_X + cell_x * CELL_SIZE + CELL_SIZE // 2,
+                "py": MAP_ORIGIN_Y + cell_y * CELL_SIZE + 8,
                 "text": text,
                 "color": color,
                 "ttl": ttl,
@@ -100,19 +104,18 @@ class Effects:
             start = coords[seg]
             end = coords[min(seg + 1, len(coords) - 1)]
             k = self.walk["t"] / self.walk["ticks_per_cell"]
-            px = (start[0] + (end[0] - start[0]) * k) * CELL_SIZE
-            py = (start[1] + (end[1] - start[1]) * k) * CELL_SIZE
+            px = MAP_ORIGIN_X + (start[0] + (end[0] - start[0]) * k) * CELL_SIZE
+            py = MAP_ORIGIN_Y + (start[1] + (end[1] - start[1]) * k) * CELL_SIZE
             draw_army_at(screen, int(px), int(py), self.walk["army"])
         if self.banner:
             alpha = 210
             if self.banner["ttl"] < 16:
                 alpha = max(30, int(210 * self.banner["ttl"] / 16))
-            width = GRID_COLS * CELL_SIZE
-            panel = pygame.Surface((width, 56), pygame.SRCALPHA)
+            panel = pygame.Surface((MAP_PIXEL_WIDTH, 56), pygame.SRCALPHA)
             panel.fill((12, 14, 20, alpha))
             screen.blit(panel, (0, WINDOW_HEIGHT // 2 - 70))
             text = title_font.render(self.banner["text"], True, (255, 230, 140))
-            screen.blit(text, text.get_rect(center=(width // 2, WINDOW_HEIGHT // 2 - 42)))
+            screen.blit(text, text.get_rect(center=(MAP_PIXEL_WIDTH // 2, WINDOW_HEIGHT // 2 - 42)))
         for floater in self.floaters:
             fade = max(40, int(255 * floater["ttl"] / floater["max_ttl"]))
             surf = font.render(floater["text"], True, floater["color"])

@@ -11,19 +11,19 @@ TUTORIAL_STEPS = [
     ),
     (
         "Déplacer",
-        "Clique une armée : sa portée s'affiche. Clique une case surlignée pour y aller.",
+        "Clique une unité : les cases possibles s'affichent. Clique une case bleue pour avancer.",
+    ),
+    (
+        "Villes et production",
+        "Clique une ville pour recruter. Le panneau du bas ne montre que ce que cette case peut faire.",
     ),
     (
         "Mer",
-        "Embarque au bord de l'eau. Sur une plage, « Débarquer ici » pose l'armée à terre.",
-    ),
-    (
-        "Villes",
-        "Tu peux fusionner tes armées dans tes villes. Une ville ne recrute qu'une fois par tour.",
+        "Les cases cyan embarquent. Sur une plage, clique la case du navire ou « Débarquer ici ».",
     ),
     (
         "Fin de tour",
-        "Espace ou « Fin de tour ». Échap : pause. Clic droit : annuler l'ordre.",
+        "Quand tes unités ont bougé : bouton vert en bas à droite, ou Espace. Échap : pause.",
     ),
 ]
 

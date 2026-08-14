@@ -29,12 +29,13 @@ Quand un royaume n’a plus d’armées ni de villes/capitales sur son territoir
 | Déplacer / attaquer | Clic sur une case surlignée |
 | Tir à distance | Clic sur une case violette (arbalétrier) |
 | Annuler l’ordre | Clic droit ou **Échap** |
-| Recruter / construire / pont | Panneau de droite → onglet Actions |
-| Embarquer | Armée côtière → « Embarquer » ou clic sur l’eau/plage bleue |
-| Débarquer | Navire → « Débarquer ici » sur une plage, ou clic sur une terre verte |
-| Fortifier | Armée sélectionnée → « Fortifier » |
-| Recherche tech | Bouton « Rechercher tech » |
-| Fin de tour | **Espace** ou « Fin de tour » (autosauvegarde) |
+| Recruter | Clique une ville : 3 cartes de production en bas |
+| Construire | Clique une case libre : fonder une ville. Pont seulement en bord de mer |
+| Embarquer | Clique une case cyan (côte) |
+| Débarquer | Clique une case verte, ou « Débarquer ici » sur une plage |
+| Fortifier | Seul bouton d’unité, dans le panneau du bas |
+| Recherche tech | Pastille en haut à droite |
+| Fin de tour | Bouton vert bas-droite, ou **Espace** |
 | Pause / réglages | **Échap** → volume, vitesse IA, difficulté |
 | Sauvegarde manuelle | **Ctrl+S** ou menu pause |
 | Charger | Menu principal → « Charger Partie » |

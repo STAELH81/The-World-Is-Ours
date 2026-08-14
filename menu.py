@@ -127,11 +127,11 @@ class Menu:
             shade = 28 + (i % 4) * 6
             pygame.draw.line(self.screen, (shade, 70 + i % 5, 110), (0, y), (WINDOW_WIDTH, y + 8), 2)
         islands = [
-            (180, 220, Country.RED),
-            (780, 180, Country.BLUE),
-            (260, 720, Country.GREEN),
-            (860, 680, Country.YELLOW),
-            (520, 420, Country.ORANGE),
+            (int(WINDOW_WIDTH * 0.22), int(WINDOW_HEIGHT * 0.22), Country.RED),
+            (int(WINDOW_WIDTH * 0.78), int(WINDOW_HEIGHT * 0.18), Country.BLUE),
+            (int(WINDOW_WIDTH * 0.28), int(WINDOW_HEIGHT * 0.72), Country.GREEN),
+            (int(WINDOW_WIDTH * 0.82), int(WINDOW_HEIGHT * 0.68), Country.YELLOW),
+            (int(WINDOW_WIDTH * 0.50), int(WINDOW_HEIGHT * 0.42), Country.ORANGE),
         ]
         for x, y, country in islands:
             bob = int(6 * math.sin(t * 1.1 + x))

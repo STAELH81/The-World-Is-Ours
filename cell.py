@@ -84,8 +84,7 @@ class Cell:
         self.last_recruit_turn = -1
 
     def draw(self, surface, assets=None, show_units=True, tick=0):
-        screen_x = self.x * CELL_SIZE
-        screen_y = self.y * CELL_SIZE
+        screen_x, screen_y = cell_screen_pos(self.x, self.y)
         vary = _tile_vary(self.x, self.y)
         color = _clamp_color(c + vary for c in TERRAIN_COLORS[self.terrain])
         if self.is_selected:

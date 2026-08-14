@@ -80,6 +80,7 @@ def make_stub_game():
     game.fx = DummyFx()
     game.last_income = 0
     game.last_upkeep = 0
+    game.ai_turn_pending = False
 
     # Keep every kingdom alive so move/combat helpers do not annex empty foes.
     for index, country in enumerate(
