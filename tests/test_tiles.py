@@ -61,6 +61,10 @@ class TileRenderTests(unittest.TestCase):
         east = grid[4][3]
         self.assertEqual(east.political_edges(grid)["e"], "frontier")
         self.assertEqual(east.territory_edge_kind(None), "outer")
+        surf = pygame.Surface((CELL_SIZE * GRID_COLS, HUD_TOP + CELL_SIZE * GRID_ROWS))
+        for x in range(2, 6):
+            for y in range(2, 5):
+                grid[x][y].draw(surf, grid=grid)
 
 
 if __name__ == "__main__":

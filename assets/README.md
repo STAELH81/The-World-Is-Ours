@@ -20,6 +20,6 @@ assets/
   buildings/city.png
 ```
 
-Les `overlay/border_*.png` ne sont plus tamponnés case par case (ça dessinait un cadre entre deux cases du même royaume). Le contour de territoire est dessiné tout seul.
+Les `overlay/border_*.png` ne sont plus tamponnés case par case. Grille légère à l’intérieur du royaume, contour fort entre royaumes.
 
 Taille recommandée : **34×34** pour le terrain, plus petit pour unités/bâtiments (voir `asset_loader.py`).

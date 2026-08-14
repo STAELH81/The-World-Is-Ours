@@ -45,7 +45,7 @@ Quand un royaume n’a plus d’armées ni de villes/capitales sur son territoir
 
 En **solo**, le brouillard reste toujours celui du **Royaume Rouge** (pas la vision des tours IA).
 
-L’interface vise un look *Civilization* précoce : bois, or, parchemin. La fenêtre est en **paysage** (1280x776) pour un moniteur normal. Tes PNG dans `assets/` (villes, unités, terrain) remplacent le dessin par défaut. Les cases d’un même royaume forment **un seul contour** ; les frontières entre royaumes restent, mais très légères.
+L’interface vise un look *Civilization* précoce : bois, or, parchemin. La fenêtre est en **paysage** (1280x776) pour un moniteur normal. Tes PNG dans `assets/` (villes, unités, terrain) remplacent le dessin par défaut. À l’intérieur d’un royaume, une **grille très légère** montre les cases ; la **bordure forte** reste entre les royaumes.
 
 ## Mer
 

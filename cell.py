@@ -106,16 +106,16 @@ class Cell:
         return pygame.Rect(s - thickness - inset, inset, thickness, s - 2 * inset)
 
     def _draw_political_borders(self, surface, screen_x, screen_y, grid):
-        """One outline around the whole kingdom; no walls between same-color tiles."""
+        """Strong outline between kingdoms; faint grid between tiles inside a kingdom."""
         color = COUNTRY_COLORS[self.country]
         layer = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
         kinds = self.political_edges(grid)
 
         for name, kind in kinds.items():
             if kind == "same":
-                continue
-            if kind == "frontier":
-                pygame.draw.rect(layer, (*color, 42), self._edge_rect(name, 1))
+                # One side only so the shared edge stays a single hairline.
+                if name in ("e", "s"):
+                    pygame.draw.rect(layer, (28, 20, 12, 48), self._edge_rect(name, 1))
                 continue
             pygame.draw.rect(layer, (*color, 70), self._edge_rect(name, 6))
             pygame.draw.rect(layer, (18, 12, 8, 200), self._edge_rect(name, 2))
