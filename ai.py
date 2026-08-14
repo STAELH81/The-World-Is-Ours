@@ -26,9 +26,9 @@ class AI:
 
         self._try_research(country, player)
         self._try_build_city(country, player)
-        self._try_build_bridge(country, player)
         self._recruit_units(country, player)
         self._move_armies(country)
+        self._try_build_bridge(country, player)
 
         print(f"[AI] {COUNTRY_NAMES[country]} termine son tour")
 
@@ -200,7 +200,7 @@ class AI:
             return True
         was_embarked = from_cell.army.embarked
         from_cell.army.embarked = False
-        path = self.game.find_path(from_cell, objective, GRID_COLS + GRID_ROWS, from_cell.army)
+        path = self.game.find_path(from_cell, objective, PATH_SEARCH_LIMIT, from_cell.army)
         from_cell.army.embarked = was_embarked
         return bool(path)
 
@@ -268,8 +268,33 @@ class AI:
                     best = target
         return best
 
+    def _has_land_path_to_enemy_capital(self, country):
+        """True if a land army can walk to any enemy capital (bridges count as land)."""
+        starts = []
+        enemy_caps = []
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = self.game.grid[x][y]
+                if cell.is_capital and cell.capital_owner == country:
+                    starts.append(cell)
+                elif cell.army and cell.army.country == country and not cell.army.embarked:
+                    starts.append(cell)
+                if cell.is_capital and cell.country not in (country, Country.NONE):
+                    enemy_caps.append(cell)
+        if not starts or not enemy_caps:
+            return True
+        dummy = Army(country, UnitType.SWORDSMAN, 1)
+        dummy.embarked = False
+        for start in starts:
+            for cap in enemy_caps:
+                if self.game.find_path(start, cap, PATH_SEARCH_LIMIT, dummy):
+                    return True
+        return False
+
     def _try_build_bridge(self, country, player):
-        if player.gold < player.bridge_cost() + 50:
+        if player.gold < player.bridge_cost() + 120:
+            return
+        if self._has_land_path_to_enemy_capital(country):
             return
         self.game.compute_bridge_targets()
         if not self.game.bridge_targets:
@@ -351,7 +376,7 @@ class AI:
                 path = self.game.find_path(from_cell, cell, movement_range, from_cell.army)
                 if not path:
                     continue
-                distance = len(path)
+                distance = self.game.path_move_cost(path, from_cell.army)
                 if distance < best_distance:
                     best_distance = distance
                     best = cell
@@ -370,7 +395,9 @@ class AI:
                 path = self.game.find_path(from_cell, cell, movement_range, from_cell.army)
                 if not path:
                     continue
-                score = self._target_score(from_cell, cell, country, len(path))
+                score = self._target_score(
+                    from_cell, cell, country, self.game.path_move_cost(path, from_cell.army)
+                )
                 if score > best_score:
                     best_score = score
                     best = cell

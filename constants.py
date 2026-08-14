@@ -177,6 +177,17 @@ TERRAIN_DEFENSE_BONUS = {
     TerrainType.BRIDGE: 0,
 }
 
+TERRAIN_MOVE_COST = {
+    TerrainType.PLAIN: 1,
+    TerrainType.BEACH: 1,
+    TerrainType.BRIDGE: 1,
+    TerrainType.FOREST: 2,
+    TerrainType.MOUNTAIN: 2,
+    TerrainType.WATER: 1,
+}
+# Budget for "is there any land route?" searches (forests/mountains cost 2).
+PATH_SEARCH_LIMIT = GRID_COLS * GRID_ROWS * 2
+
 KINGDOM_TRAITS = {
     Country.RED: {
         "id": "swords",

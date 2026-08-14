@@ -17,6 +17,7 @@ from constants import (
 )
 from main import Game
 from player import Player
+from ai import AI
 
 
 class DummyFx:
@@ -82,6 +83,7 @@ def make_stub_game():
     game.last_income = 0
     game.last_upkeep = 0
     game.ai_turn_pending = False
+    game.difficulty_cfg = {"ai_truce_turns": 0, "ai_recruit_limit": 2}
 
     # Keep every kingdom alive so move/combat helpers do not annex empty foes.
     for index, country in enumerate(
@@ -353,6 +355,76 @@ class NavalAndTraitTests(unittest.TestCase):
         self.assertEqual(game.move_costs[far], UNIT_MOVEMENT_RANGE[UnitType.CAVALRY])
         self.assertNotIn(too_far, moves)
         self.assertNotIn(too_far, game.move_costs)
+
+    def test_forest_costs_two_movement(self):
+        game = make_stub_game()
+        start = game.grid[8][8]
+        forest = game.grid[9][8]
+        beyond = game.grid[10][8]
+        start.country = Country.RED
+        start.terrain = TerrainType.PLAIN
+        forest.terrain = TerrainType.FOREST
+        beyond.terrain = TerrainType.PLAIN
+        start.army = Army(Country.RED, UnitType.CAVALRY, 1)
+        start.army.refresh_movement(game.players[Country.RED])
+        start.army.movement_left = 2
+        moves, _attacks = game.get_reachable_cells(start)
+        self.assertIn((9, 8), moves)
+        self.assertEqual(game.move_costs[(9, 8)], 2)
+        self.assertNotIn((10, 8), moves)
+        game.move_army(start, forest)
+        self.assertIsNone(start.army)
+        self.assertIsNotNone(forest.army)
+        self.assertEqual(forest.army.movement_left, 0)
+
+    def test_ai_skips_bridge_when_land_path_exists(self):
+        game = make_stub_game()
+        game.current_player_country = Country.GREEN
+        player = game.players[Country.GREEN]
+        player.gold = 500
+        ai = AI(game)
+        self.assertTrue(ai._has_land_path_to_enemy_capital(Country.GREEN))
+        ai._try_build_bridge(Country.GREEN, player)
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                self.assertNotEqual(game.grid[x][y].terrain, TerrainType.BRIDGE)
+
+    def test_ai_builds_bridge_when_cut_off(self):
+        game = make_stub_game()
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = game.grid[x][y]
+                cell.terrain = TerrainType.WATER
+                cell.country = Country.NONE
+                cell.is_capital = False
+                cell.capital_owner = Country.NONE
+                cell.army = None
+        for x in range(1, 4):
+            for y in range(1, 4):
+                cell = game.grid[x][y]
+                cell.terrain = TerrainType.PLAIN
+                cell.country = Country.GREEN
+        for x in range(5, 8):
+            for y in range(1, 4):
+                cell = game.grid[x][y]
+                cell.terrain = TerrainType.PLAIN
+                cell.country = Country.RED
+        green_cap = game.grid[2][2]
+        green_cap.is_capital = True
+        green_cap.capital_owner = Country.GREEN
+        green_cap.army = Army(Country.GREEN, UnitType.SWORDSMAN, 1)
+        red_cap = game.grid[6][2]
+        red_cap.is_capital = True
+        red_cap.capital_owner = Country.RED
+        game.current_player_country = Country.GREEN
+        game.turn_number = 10
+        player = game.players[Country.GREEN]
+        player.gold = 500
+        ai = AI(game)
+        self.assertFalse(ai._has_land_path_to_enemy_capital(Country.GREEN))
+        self.assertTrue(game.is_valid_bridge_site(game.grid[4][2]))
+        ai._try_build_bridge(Country.GREEN, player)
+        self.assertEqual(game.grid[4][2].terrain, TerrainType.BRIDGE)
 
 
 if __name__ == "__main__":

@@ -51,6 +51,8 @@ L’interface vise un look *Civilization* précoce : bois, or, parchemin. La fen
 
 Les plages se **marchent à pied**. On n’embarque qu’en cliquant une case d’**eau**. Un navire reste sur l’eau ou un pont ; il débarque sur une terre ou une plage. Un pont ne se construit que sur un **détroit** (eau coincée entre deux terres), pas le long d’une plage.
 
+Plaine, plage, pont et mer coûtent **1 PM**. Forêt et montagne coûtent **2 PM**. L’IA ne construit un pont que si aucune route terrestre n’atteint une capitale ennemie.
+
 ## Traits des royaumes
 
 | Royaume | Trait |

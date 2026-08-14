@@ -1,7 +1,7 @@
 import math
+import heapq
 import pygame
 import sys
-from collections import deque
 from constants import *
 from cell import Cell, draw_army_at
 from ui import UI
@@ -277,7 +277,7 @@ class Game:
         if not path_cells:
             self.log_event("Aucun chemin valide vers cette case")
             return
-        move_cost = len(path_cells)
+        move_cost = self.path_move_cost(path_cells, army)
 
         # Si case ennemie avec armée → COMBAT
         if to_cell.army and to_cell.army.country != self.current_player_country:
@@ -719,35 +719,47 @@ class Game:
             self.add_animation([(cell.x, cell.y)], (120, 150, 220), 20)
             self.update_defeat_states()
 
+    def terrain_move_cost(self, cell, moving_army):
+        """PM spent to enter a tile. Ships always pay 1."""
+        if moving_army and moving_army.embarked:
+            return 1
+        return TERRAIN_MOVE_COST.get(cell.terrain, 1)
+
+    def path_move_cost(self, path_cells, moving_army):
+        return sum(self.terrain_move_cost(cell, moving_army) for cell in path_cells)
+
     def find_path(self, from_cell, to_cell, max_range, moving_army):
-        """BFS pathfinding up to max_range. Returns list excluding start."""
+        """Dijkstra: cost is spent entering each tile. Returns list excluding start."""
         start = (from_cell.x, from_cell.y)
         goal = (to_cell.x, to_cell.y)
-        queue = deque([start])
-        came_from = {start: None}
+        if start == goal:
+            return []
         dist = {start: 0}
+        came_from = {start: None}
+        heap = [(0, start)]
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
-        while queue:
-            cx, cy = queue.popleft()
+        while heap:
+            cost, (cx, cy) = heapq.heappop(heap)
+            if cost > dist.get((cx, cy), 10**9):
+                continue
             if (cx, cy) == goal:
                 break
-            if dist[(cx, cy)] >= max_range:
-                continue
-
             for dx, dy in directions:
                 nx, ny = cx + dx, cy + dy
                 if not (0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS):
-                    continue
-                if (nx, ny) in came_from:
                     continue
                 next_cell = self.grid[nx][ny]
                 is_goal = (nx, ny) == goal
                 if not self.can_step_through(next_cell, moving_army, is_goal=is_goal):
                     continue
-                came_from[(nx, ny)] = (cx, cy)
-                dist[(nx, ny)] = dist[(cx, cy)] + 1
-                queue.append((nx, ny))
+                nd = cost + self.terrain_move_cost(next_cell, moving_army)
+                if nd > max_range:
+                    continue
+                if nd < dist.get((nx, ny), 10**9):
+                    dist[(nx, ny)] = nd
+                    came_from[(nx, ny)] = (cx, cy)
+                    heapq.heappush(heap, (nd, (nx, ny)))
 
         if goal not in came_from:
             return []
@@ -861,7 +873,7 @@ class Game:
                 path_cells = self.find_path(from_cell, target, max_range, from_cell.army)
                 if not path_cells:
                     continue
-                costs[(x, y)] = len(path_cells)
+                costs[(x, y)] = self.path_move_cost(path_cells, from_cell.army)
                 if target.army and target.army.country != self.current_player_country:
                     attack_targets.add((x, y))
                 else:
@@ -1705,6 +1717,9 @@ class Game:
             lines.append("Capitale")
         elif cell.is_city:
             lines.append("Ville")
+        move_cost = TERRAIN_MOVE_COST.get(cell.terrain, 1)
+        if cell.terrain != TerrainType.WATER:
+            lines.append(f"Coût de déplacement : {move_cost} PM")
         bonus = TERRAIN_DEFENSE_BONUS.get(cell.terrain, 0)
         if bonus:
             lines.append(f"Défense terrain +{bonus}")
@@ -1726,9 +1741,9 @@ class Game:
             if dest in self.move_targets and cost is not None:
                 left = max(0, army.movement_left - cost)
                 if left <= 0:
-                    lines.append(f"L'armée s'arrête ici ({cost} cases)")
+                    lines.append(f"L'armée s'arrête ici ({cost} PM)")
                 else:
-                    lines.append(f"{cost} cases. Encore {left} de mouvement après")
+                    lines.append(f"{cost} PM. Encore {left} après")
             elif dest in self.attack_targets:
                 lines.append("Attaque : l'armée avance jusqu'ici")
             elif dest in self.embark_targets:
