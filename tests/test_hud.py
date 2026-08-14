@@ -75,6 +75,16 @@ class HudLayoutTests(unittest.TestCase):
         self.assertTrue(ctx["can_fortify"])
         self.assertEqual([b.text for b in buttons], ["Fortifier"])
 
+    def test_tooltip_wraps_long_kingdom_names(self):
+        pygame.font.init()
+        from theme import load_font, wrap_text
+
+        font = load_font(16)
+        lines = wrap_text(font, "Royaume Rouge  (10,13)", 240)
+        self.assertGreaterEqual(len(lines), 1)
+        for line in lines:
+            self.assertLessEqual(font.size(line)[0], 240)
+
 
 if __name__ == "__main__":
     unittest.main()

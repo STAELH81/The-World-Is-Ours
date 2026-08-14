@@ -294,6 +294,9 @@ class Game:
                 to_cell.army.movement_left = max(0, to_cell.army.movement_left - move_cost)
                 to_cell.army.has_moved = to_cell.army.movement_left <= 0
                 self.apply_bridge_wear(path_cells)
+            elif from_cell.army and from_cell.army.country == self.current_player_country:
+                from_cell.army.movement_left = 0
+                from_cell.army.has_moved = True
             self.evaluate_occupation_pressure()
             self.check_victory()
             return
@@ -1478,7 +1481,7 @@ class Game:
                         self.audio.play("click")
                         if own_army:
                             self.select_army_for_orders(clicked_cell)
-                            self.log_event(f"{UNIT_NAMES[clicked_cell.army.unit_type]} : clique une case surlignée")
+                            self.log_event(f"{UNIT_NAMES[clicked_cell.army.unit_type]} : + avancer, X attaquer")
                         else:
                             self.clear_order_modes()
                             self.selected_cell = clicked_cell
@@ -1577,9 +1580,9 @@ class Game:
                     is_discovered = self.get_viewer_country() in cell.discovered_by
                     show_units = is_visible and (x, y) not in hidden
                     if is_visible:
-                        cell.draw(self.screen, self.assets, show_units=show_units, tick=tick)
+                        cell.draw(self.screen, self.assets, show_units=show_units, tick=tick, grid=self.grid)
                     elif is_discovered:
-                        cell.draw(self.screen, self.assets, show_units=False, tick=tick)
+                        cell.draw(self.screen, self.assets, show_units=False, tick=tick, grid=self.grid)
                     else:
                         pygame.draw.rect(
                             self.screen,
@@ -1687,9 +1690,11 @@ class Game:
         })
 
     def draw_tooltip(self):
-        if not self.hovered_cell:
+        if not self.hovered_cell or not self.ui:
             return
         x, y = pygame.mouse.get_pos()
+        if self.ui.blocks_map((x, y)):
+            return
         if x >= MAP_PIXEL_WIDTH or y < MAP_ORIGIN_Y:
             return
         if (self.hovered_cell.x, self.hovered_cell.y) not in self.visibility:
@@ -1714,22 +1719,35 @@ class Game:
             ship = " navire" if army.embarked else ""
             letter = UNIT_LETTERS.get(army.unit_type, "?")
             lines.append(
-                f"{letter} {UNIT_NAMES[army.unit_type]}{ship} ×{army.count}  mvt {army.movement_left}"
+                f"{letter} {UNIT_NAMES[army.unit_type]}{ship}  ×{army.count}"
             )
+            lines.append(f"Mouvement {army.movement_left}/{army.movement_range(self.players.get(army.country))}")
             stats = UNIT_STATS[army.unit_type]
             lines.append(f"Att {stats['attack']}  Déf {stats['defense']}")
 
-        from theme import INK, PARCHMENT, GOLD, load_font, draw_bevel_rect
+        from theme import INK, PARCHMENT, GOLD, WOOD_DARK, load_font, draw_bevel_rect, wrap_text
 
         font = load_font(16)
-        width = max(font.size(line)[0] for line in lines) + 16
-        height = len(lines) * 18 + 12
-        tx = min(x + 14, MAP_PIXEL_WIDTH - width - 4)
-        ty = min(max(MAP_ORIGIN_Y + 4, y + 14), WINDOW_HEIGHT - height - 4)
+        max_line = 240
+        wrapped = []
+        for line in lines:
+            wrapped.extend(wrap_text(font, line, max_line))
+        width = max(max_line, max(font.size(line)[0] for line in wrapped) + 20)
+        height = len(wrapped) * 18 + 14
+        tx = x + 16
+        ty = y + 16
+        if tx + width > MAP_PIXEL_WIDTH - 4:
+            tx = x - width - 12
+        if ty + height > WINDOW_HEIGHT - 4:
+            ty = y - height - 12
+        tx = max(4, min(tx, MAP_PIXEL_WIDTH - width - 4))
+        ty = max(MAP_ORIGIN_Y + 4, min(ty, WINDOW_HEIGHT - height - 4))
         rect = pygame.Rect(tx, ty, width, height)
-        draw_bevel_rect(self.screen, rect, PARCHMENT, GOLD, (48, 28, 14), 2)
-        for idx, line in enumerate(lines):
-            self.screen.blit(font.render(line, True, INK), (tx + 8, ty + 6 + idx * 18))
+        draw_bevel_rect(self.screen, rect, PARCHMENT, GOLD, WOOD_DARK, 2)
+        pygame.draw.rect(self.screen, GOLD, rect, 1)
+        for idx, line in enumerate(wrapped):
+            self.screen.blit(font.render(line, True, INK), (tx + 10, ty + 7 + idx * 18))
+
 
 if __name__ == "__main__":
     game = Game()

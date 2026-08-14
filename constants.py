@@ -51,12 +51,12 @@ NAVAL_TERRAINS = (TerrainType.WATER, TerrainType.BRIDGE)
 DISEMBARK_TERRAINS = SHORE_TERRAINS
 
 TERRAIN_COLORS = {
-    TerrainType.PLAIN: (148, 168, 92),
-    TerrainType.MOUNTAIN: (142, 118, 82),
-    TerrainType.FOREST: (46, 92, 40),
-    TerrainType.WATER: (48, 92, 128),
-    TerrainType.BEACH: (214, 196, 148),
-    TerrainType.BRIDGE: (132, 98, 58),
+    TerrainType.PLAIN: (132, 156, 78),
+    TerrainType.MOUNTAIN: (128, 108, 78),
+    TerrainType.FOREST: (38, 78, 36),
+    TerrainType.WATER: (28, 68, 112),
+    TerrainType.BEACH: (214, 192, 140),
+    TerrainType.BRIDGE: (118, 86, 48),
 }
 
 COUNTRY_COLORS = {

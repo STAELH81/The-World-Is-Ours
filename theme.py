@@ -55,6 +55,16 @@ def draw_panel(surface, rect, title=None):
     return parchment
 
 
+def blit_outlined(surface, font, text, color, outline, topleft):
+    x, y = topleft
+    shadow = font.render(text, True, outline)
+    glyph = font.render(text, True, color)
+    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        surface.blit(shadow, (x + dx, y + dy))
+    surface.blit(glyph, (x, y))
+    return glyph
+
+
 def wrap_text(font, text, max_width):
     words = text.split()
     if not words:

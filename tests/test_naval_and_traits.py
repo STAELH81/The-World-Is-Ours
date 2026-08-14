@@ -316,6 +316,28 @@ class NavalAndTraitTests(unittest.TestCase):
         self.assertEqual(city.army.count, 1)
         self.assertEqual(game.players[Country.RED].gold, gold_after)
 
+    def test_indecisive_combat_spends_attacker_movement(self):
+        game = make_stub_game()
+        game.current_player_country = Country.GREEN
+        attacker = game.grid[8][8]
+        defender = game.grid[8][9]
+        attacker.terrain = TerrainType.PLAIN
+        defender.terrain = TerrainType.PLAIN
+        attacker.country = Country.GREEN
+        defender.country = Country.YELLOW
+        attacker.army = Army(Country.GREEN, UnitType.SWORDSMAN, 4)
+        defender.army = Army(Country.YELLOW, UnitType.SWORDSMAN, 3)
+        attacker.army.refresh_movement(game.players[Country.GREEN])
+        defender.army.refresh_movement(game.players[Country.YELLOW])
+        game.move_army(attacker, defender)
+        self.assertIsNotNone(attacker.army)
+        self.assertIsNotNone(defender.army)
+        self.assertEqual(attacker.army.country, Country.GREEN)
+        self.assertEqual(attacker.army.movement_left, 0)
+        self.assertTrue(attacker.army.has_moved)
+        self.assertEqual(attacker.army.count, 3)
+        self.assertEqual(defender.army.count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

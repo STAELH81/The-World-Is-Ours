@@ -101,6 +101,7 @@ Sans fichiers, le jeu utilise des formes et couleurs générées.
 | `settings.py` | Volume, vitesse IA, difficulté |
 | `constants.py` | Équilibrage et énumérations |
 | `theme.py` | Bois, or, parchemin, polices, hachures |
+| `tiles.py` | Tuiles et figurines style Civilization I |
 | `cell.py`, `army.py`, `player.py` | Modèle de jeu |
 | `ui.py`, `menu.py` | Interface |
 
