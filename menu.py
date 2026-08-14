@@ -81,6 +81,7 @@ class Menu:
             "", (90, 110, 150), (105, 130, 170)
         )
         self.settings = load_settings()
+        self.load_error = ""
 
     def handle_event(self, event):
         if self.state == "main":
@@ -90,6 +91,7 @@ class Menu:
                 return None
             
             if self.btn_load_game.handle_event(event):
+                self.load_error = ""
                 return "load"
             
             if self.btn_quit.handle_event(event):
@@ -116,50 +118,58 @@ class Menu:
         
         return None
     
+    def _draw_backdrop(self):
+        import math
+        t = pygame.time.get_ticks() / 1000.0
+        self.screen.fill((14, 32, 58))
+        for i in range(18):
+            y = int((i * 58 + t * 28) % (WINDOW_HEIGHT + 40)) - 20
+            shade = 28 + (i % 4) * 6
+            pygame.draw.line(self.screen, (shade, 70 + i % 5, 110), (0, y), (WINDOW_WIDTH, y + 8), 2)
+        islands = [
+            (180, 220, Country.RED),
+            (780, 180, Country.BLUE),
+            (260, 720, Country.GREEN),
+            (860, 680, Country.YELLOW),
+            (520, 420, Country.ORANGE),
+        ]
+        for x, y, country in islands:
+            bob = int(6 * math.sin(t * 1.1 + x))
+            pygame.draw.ellipse(self.screen, (48, 120, 62), (x - 70, y - 40 + bob, 140, 80))
+            pygame.draw.ellipse(self.screen, COUNTRY_COLORS[country], (x - 18, y - 10 + bob, 36, 24))
+        veil = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+        veil.fill((8, 10, 16, 120))
+        self.screen.blit(veil, (0, 0))
+
     def draw(self):
-        # Fond
-        self.screen.fill((30, 30, 35))
-        
-        # Titre
+        self._draw_backdrop()
         title = self.font_title.render("The World Is Ours", True, (255, 215, 0))
-        title_rect = title.get_rect(center=(WINDOW_WIDTH // 2, 150))
-        self.screen.blit(title, title_rect)
-        
-        # Sous-titre
+        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 150)))
         if self.state == "main":
             subtitle = self.font_small.render("Un jeu de conquête médiéval", True, (200, 200, 200))
         else:
             subtitle = self.font_small.render("Choisissez votre mode de jeu", True, (200, 200, 200))
-        
-        subtitle_rect = subtitle.get_rect(center=(WINDOW_WIDTH // 2, 220))
-        self.screen.blit(subtitle, subtitle_rect)
-        
-        # Dessine les boutons selon l'état
+        self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_WIDTH // 2, 220)))
+
         if self.state == "main":
             self.btn_new_game.draw(self.screen, self.font_button)
             self.btn_load_game.draw(self.screen, self.font_button)
             self.btn_quit.draw(self.screen, self.font_button)
-        
+            if self.load_error:
+                err = self.font_small.render(self.load_error, True, (240, 160, 140))
+                self.screen.blit(err, err.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - 50)))
         elif self.state == "mode_select":
             labels = {"easy": "Facile", "normal": "Normal", "hard": "Difficile"}
             diff = self.settings.get("difficulty", "normal")
-            self.btn_difficulty.text = f"Difficulte: {labels.get(diff, diff)}"
+            self.btn_difficulty.text = f"Difficulté : {labels.get(diff, diff)}"
             self.btn_difficulty.draw(self.screen, self.font_button)
             self.btn_solo.draw(self.screen, self.font_button)
             self.btn_godgame.draw(self.screen, self.font_button)
             self.btn_back.draw(self.screen, self.font_button)
-            
-            # Descriptions des modes
-            y = 550
-            solo_desc = self.font_small.render("Jouez contre l'ordinateur", True, (180, 180, 180))
-            god_desc = self.font_small.render("Contrôlez tous les pays", True, (180, 180, 180))
-            
-            solo_rect = solo_desc.get_rect(center=(WINDOW_WIDTH // 2, y))
-            god_rect = god_desc.get_rect(center=(WINDOW_WIDTH // 2, y + 80))
-            
-            if self.btn_solo.is_hovered:
-                self.screen.blit(solo_desc, solo_rect)
-            elif self.btn_godgame.is_hovered:
-                self.screen.blit(god_desc, god_rect)
-        
+            hint = self.font_small.render(
+                "Rouge : lames  ·  Bleu : mer  ·  Vert : forêts  ·  Jaune : or  ·  Orange : cavalerie",
+                True,
+                (170, 175, 185),
+            )
+            self.screen.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - 40)))
         pygame.display.flip()

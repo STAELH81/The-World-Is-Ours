@@ -10,20 +10,20 @@ TUTORIAL_STEPS = [
         "Conquiers les capitales ennemies ou sois le dernier royaume debout.",
     ),
     (
-        "Selection",
-        "Clique une case pour voir ses infos et les actions disponibles.",
+        "Déplacer",
+        "Clique une armée : sa portée s'affiche. Clique une case surlignée pour y aller.",
     ),
     (
-        "Economie",
-        "Recrute dans tes villes/capitales, construis des villes et des ponts.",
+        "Mer",
+        "Embarque au bord de l'eau. Sur une plage, « Débarquer ici » pose l'armée à terre.",
     ),
     (
-        "Armee",
-        "Deplace tes unites, fortifie-les ou tire a distance (arbaletriers).",
+        "Villes",
+        "Tu peux fusionner tes armées dans tes villes. Une ville ne recrute qu'une fois par tour.",
     ),
     (
         "Fin de tour",
-        "Quand tu as fini, clique « Fin de tour ». La partie est sauvegardee automatiquement.",
+        "Espace ou « Fin de tour ». Échap : pause. Clic droit : annuler l'ordre.",
     ),
 ]
 
@@ -61,31 +61,24 @@ class Tutorial:
     def draw(self, surface):
         if not self.active:
             return
-
         overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 170))
         surface.blit(overlay, (0, 0))
-
-        panel_w = min(560, WINDOW_WIDTH - 40)
-        panel_h = 180
+        panel_w = min(640, WINDOW_WIDTH - 40)
+        panel_h = 200
         panel_x = (WINDOW_WIDTH - panel_w) // 2
         panel_y = WINDOW_HEIGHT // 2 - panel_h // 2
         pygame.draw.rect(surface, (35, 38, 48), (panel_x, panel_y, panel_w, panel_h), border_radius=12)
         pygame.draw.rect(surface, (90, 100, 120), (panel_x, panel_y, panel_w, panel_h), 2, border_radius=12)
-
         title_font = pygame.font.Font(None, 34)
-        body_font = pygame.font.Font(None, 26)
+        body_font = pygame.font.Font(None, 24)
         hint_font = pygame.font.Font(None, 22)
-
         title, body = TUTORIAL_STEPS[self.step]
-        title_surf = title_font.render(title, True, (255, 220, 120))
-        body_surf = body_font.render(body, True, (230, 230, 230))
+        surface.blit(title_font.render(title, True, (255, 220, 120)), title_font.render(title, True, (255, 220, 120)).get_rect(center=(WINDOW_WIDTH // 2, panel_y + 42)))
+        surface.blit(body_font.render(body, True, (230, 230, 230)), body_font.render(body, True, (230, 230, 230)).get_rect(center=(WINDOW_WIDTH // 2, panel_y + 100)))
         hint = hint_font.render(
-            f"Etape {self.step + 1}/{len(TUTORIAL_STEPS)} — Clic ou Entree pour continuer",
+            f"Étape {self.step + 1}/{len(TUTORIAL_STEPS)} — Clic ou Entrée pour continuer",
             True,
             (180, 180, 190),
         )
-
-        surface.blit(title_surf, title_surf.get_rect(center=(WINDOW_WIDTH // 2, panel_y + 42)))
-        surface.blit(body_surf, body_surf.get_rect(center=(WINDOW_WIDTH // 2, panel_y + 95)))
         surface.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, panel_y + panel_h - 28)))

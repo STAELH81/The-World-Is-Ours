@@ -25,18 +25,35 @@ Quand un royaume n’a plus d’armées ni de villes/capitales sur son territoir
 
 | Action | Comment |
 |--------|---------|
-| Sélectionner une case | Clic gauche sur la carte |
+| Sélectionner une armée | Clic gauche : la portée s’affiche tout de suite |
+| Déplacer / attaquer | Clic sur une case surlignée |
+| Tir à distance | Clic sur une case violette (arbalétrier) |
+| Annuler l’ordre | Clic droit ou **Échap** |
 | Recruter / construire / pont | Panneau de droite → onglet Actions |
-| Déplacer une armée | Sélectionner l’armée → « Déplacer armée » → clic destination |
-| Tir à distance | Arbalétrier → « Tir à distance » → clic cible |
+| Embarquer | Armée côtière → « Embarquer » ou clic sur l’eau/plage bleue |
+| Débarquer | Navire → « Débarquer ici » sur une plage, ou clic sur une terre verte |
 | Fortifier | Armée sélectionnée → « Fortifier » |
 | Recherche tech | Bouton « Rechercher tech » |
-| Fin de tour | « Fin de tour » (autosauvegarde) |
+| Fin de tour | **Espace** ou « Fin de tour » (autosauvegarde) |
 | Pause / réglages | **Échap** → volume, vitesse IA, difficulté |
 | Sauvegarde manuelle | **Ctrl+S** ou menu pause |
 | Charger | Menu principal → « Charger Partie » |
 
 En **solo**, le brouillard reste toujours celui du **Royaume Rouge** (pas la vision des tours IA).
+
+## Mer
+
+Les plages sont des cases côtières : un navire peut y rester, puis **débarquer sur place**. L’embarquement coûte de l’or et consomme tous les PM. Un navire ne capture pas les terres ; il faut débarquer pour se battre à pied.
+
+## Traits des royaumes
+
+| Royaume | Trait |
+|---------|--------|
+| Rouge | Spadassins moins chers et plus solides |
+| Bleu | Ponts et transports moins chers |
+| Vert | Meilleure défense en forêt, villes plus rentables |
+| Jaune | Capitales plus riches |
+| Orange | Cavalerie plus mobile |
 
 ## Carte
 
@@ -71,7 +88,8 @@ Sans fichiers, le jeu utilise des formes et couleurs générées.
 | `map_generator.py` | Génération procédurale de carte |
 | `ai.py` | Intelligence artificielle |
 | `save_game.py` | Sauvegarde / chargement JSON |
-| `audio.py` | Sons procéduraux |
+| `audio.py` | Sons et musique procéduraux |
+| `fx.py` | Marche des unités, bannières, fin de partie |
 | `tutorial.py` | Tutoriel au premier lancement |
 | `pause_menu.py` | Menu pause et réglages |
 | `settings.py` | Volume, vitesse IA, difficulté |

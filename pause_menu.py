@@ -30,7 +30,7 @@ class PauseMenu:
         y = WINDOW_HEIGHT // 2 - 90
 
         self.btn_resume = Button(cx, y, bw, bh, "Reprendre", (39, 174, 96), (46, 204, 113))
-        self.btn_settings = Button(cx, y + 52, bw, bh, "Reglages", (41, 128, 185), (52, 152, 219))
+        self.btn_settings = Button(cx, y + 52, bw, bh, "Réglages", (41, 128, 185), (52, 152, 219))
         self.btn_save = Button(cx, y + 104, bw, bh, "Sauvegarder", (127, 101, 65), (148, 122, 86))
         self.btn_quit = Button(cx, y + 156, bw, bh, "Menu principal", (192, 57, 43), (231, 76, 60))
 
@@ -132,7 +132,7 @@ class PauseMenu:
             self.screen.blit(hint, hint.get_rect(center=(MAP_WIDTH // 2, WINDOW_HEIGHT - 40)))
             return
 
-        settings_title = self.font_title.render("Reglages", True, (220, 220, 230))
+        settings_title = self.font_title.render("Réglages", True, (220, 220, 230))
         self.screen.blit(settings_title, settings_title.get_rect(center=(MAP_WIDTH // 2, 170)))
 
         vol_pct = int(self.settings["volume"] * 100)
@@ -142,7 +142,7 @@ class PauseMenu:
         self.btn_vol_up.draw(self.screen, self.font_body)
 
         speed_labels = {
-            "instant": "Instantane",
+            "instant": "Instantané",
             "fast": "Rapide",
             "normal": "Normal",
             "slow": "Lent",
@@ -154,7 +154,7 @@ class PauseMenu:
         diff_labels = {"easy": "Facile", "normal": "Normal", "hard": "Difficile"}
         diff_key = self.settings.get("difficulty", "normal")
         self.btn_difficulty.text = (
-            f"Difficulte (prochaine partie): {diff_labels.get(diff_key, diff_key)}"
+            f"Difficulté (prochaine partie) : {diff_labels.get(diff_key, diff_key)}"
         )
         self.btn_difficulty.draw(self.screen, self.font_body)
 

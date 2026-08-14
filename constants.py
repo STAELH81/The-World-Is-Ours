@@ -1,16 +1,14 @@
 from enum import Enum
 
-# Taille de la grille
 GRID_COLS = 20
 GRID_ROWS = 30
 CELL_SIZE = 34
 
-# UI
 UI_WIDTH = 380
-WINDOW_WIDTH = GRID_COLS * CELL_SIZE + UI_WIDTH  # MODIFIÉ
+WINDOW_WIDTH = GRID_COLS * CELL_SIZE + UI_WIDTH
 WINDOW_HEIGHT = GRID_ROWS * CELL_SIZE
 
-# Types de terrain
+
 class TerrainType(Enum):
     PLAIN = 0
     MOUNTAIN = 1
@@ -19,7 +17,7 @@ class TerrainType(Enum):
     BEACH = 4
     BRIDGE = 5
 
-# Pays
+
 class Country(Enum):
     NONE = 0
     RED = 1
@@ -28,7 +26,11 @@ class Country(Enum):
     YELLOW = 4
     ORANGE = 5
 
-# Couleurs des terrains
+
+LAND_TERRAINS = (TerrainType.PLAIN, TerrainType.MOUNTAIN, TerrainType.FOREST)
+NAVAL_TERRAINS = (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
+DISEMBARK_TERRAINS = (TerrainType.PLAIN, TerrainType.MOUNTAIN, TerrainType.FOREST, TerrainType.BEACH)
+
 TERRAIN_COLORS = {
     TerrainType.PLAIN: (126, 200, 80),
     TerrainType.MOUNTAIN: (107, 66, 38),
@@ -38,7 +40,6 @@ TERRAIN_COLORS = {
     TerrainType.BRIDGE: (127, 101, 65),
 }
 
-# Couleurs des pays
 COUNTRY_COLORS = {
     Country.NONE: (255, 255, 255),
     Country.RED: (192, 57, 43),
@@ -48,7 +49,6 @@ COUNTRY_COLORS = {
     Country.ORANGE: (230, 126, 34),
 }
 
-# Noms complets des pays - NOUVEAU
 COUNTRY_NAMES = {
     Country.NONE: "Aucun",
     Country.RED: "Royaume Rouge",
@@ -58,7 +58,6 @@ COUNTRY_NAMES = {
     Country.ORANGE: "Royaume Orange",
 }
 
-# Noms des terrains - NOUVEAU (complets)
 TERRAIN_FULL_NAMES = {
     TerrainType.PLAIN: "Plaine",
     TerrainType.MOUNTAIN: "Montagne",
@@ -68,57 +67,46 @@ TERRAIN_FULL_NAMES = {
     TerrainType.BRIDGE: "Pont",
 }
 
-# Couleurs UI - NOUVEAU
-UI_BG_COLOR = (40, 40, 45)
+UI_BG_COLOR = (32, 34, 40)
 UI_TEXT_COLOR = (220, 220, 220)
 UI_TITLE_COLOR = (255, 255, 255)
 
-# Types d'unités
-class UnitType(Enum):
-    SWORDSMAN = 0  # Spadassin
-    CROSSBOWMAN = 1  # Arbalétrier
-    CAVALRY = 2  # Cavalerie
 
-# Noms des unités
+class UnitType(Enum):
+    SWORDSMAN = 0
+    CROSSBOWMAN = 1
+    CAVALRY = 2
+
+
 UNIT_NAMES = {
     UnitType.SWORDSMAN: "Spadassin",
     UnitType.CROSSBOWMAN: "Arbalétrier",
     UnitType.CAVALRY: "Cavalerie",
 }
 
-# Icônes/symboles des unités (pour l'affichage)
-UNIT_SYMBOLS = {
-    UnitType.SWORDSMAN: "⚔",
-    UnitType.CROSSBOWMAN: "🏹",
-    UnitType.CAVALRY: "🐴",
-}
-
-# Coûts de recrutement
 UNIT_COSTS = {
     UnitType.SWORDSMAN: 40,
     UnitType.CROSSBOWMAN: 55,
     UnitType.CAVALRY: 70,
 }
 MAX_UNITS_PER_ARMY = 16
+UNIT_UPKEEP = 5
 
-# Coût d'entretien par tour
-UNIT_UPKEEP = 5 
-
-# Villes
-CITY_COST = 150  # Coût de construction d'une ville
-CITY_INCOME = 50  # Or généré par ville par tour
-CITY_TERRITORY_REQUIREMENT = 25  # Cases nécessaires pour 1 ville
+CITY_COST = 150
+CITY_INCOME = 50
+CAPITAL_INCOME = 100
+CITY_TERRITORY_REQUIREMENT = 25
 BRIDGE_COST = 90
+EMBARK_COST = 50
+SHIP_MOVEMENT_RANGE = 5
 
-# Stats de combat (pour plus tard)
 UNIT_STATS = {
     UnitType.SWORDSMAN: {"attack": 3, "defense": 4},
     UnitType.CROSSBOWMAN: {"attack": 3, "defense": 2},
     UnitType.CAVALRY: {"attack": 4, "defense": 3},
 }
 
-# Mouvement
-MOVEMENT_RANGE = 3  # Nombre de cases max par déplacement
+MOVEMENT_RANGE = 3
 UNIT_MOVEMENT_RANGE = {
     UnitType.SWORDSMAN: 2,
     UnitType.CROSSBOWMAN: 3,
@@ -132,20 +120,54 @@ FORTIFY_DEFENSE_BONUS = 1
 
 TECH_TREE = [
     {"id": "economy", "name": "Agriculture", "cost": 250},
-    {"id": "engineering", "name": "Ingenierie", "cost": 280},
+    {"id": "engineering", "name": "Ingénierie", "cost": 280},
     {"id": "ballistics", "name": "Balistique", "cost": 320},
     {"id": "logistics", "name": "Logistique", "cost": 360},
 ]
 
-# Visibilité
 FOG_RADIUS = 2
 
-# Bonus de combat selon terrain
 TERRAIN_DEFENSE_BONUS = {
     TerrainType.PLAIN: 0,
-    TerrainType.MOUNTAIN: 2,  # +2 défense en montagne
-    TerrainType.FOREST: 1,    # +1 défense en forêt
+    TerrainType.MOUNTAIN: 2,
+    TerrainType.FOREST: 1,
     TerrainType.WATER: 0,
     TerrainType.BEACH: 0,
     TerrainType.BRIDGE: 0,
+}
+
+KINGDOM_TRAITS = {
+    Country.RED: {
+        "id": "swords",
+        "name": "Lames du Royaume",
+        "blurb": "Spadassins moins chers et plus solides",
+        "swordsman_cost_reduction": 10,
+        "swordsman_attack_bonus": 1,
+    },
+    Country.BLUE: {
+        "id": "navy",
+        "name": "Maîtres des détroits",
+        "blurb": "Ponts et transports moins chers",
+        "bridge_cost_reduction": 30,
+        "embark_cost_reduction": 20,
+    },
+    Country.GREEN: {
+        "id": "woods",
+        "name": "Seigneurs des forêts",
+        "blurb": "Bonus défense en forêt, villes plus rentables",
+        "forest_defense_bonus": 1,
+        "city_income_bonus": 15,
+    },
+    Country.YELLOW: {
+        "id": "gold",
+        "name": "Trésor impérial",
+        "blurb": "Les capitales rapportent plus d'or",
+        "capital_income_bonus": 40,
+    },
+    Country.ORANGE: {
+        "id": "cavalry",
+        "name": "Cavaliers du vent",
+        "blurb": "La cavalerie se déplace plus loin",
+        "cavalry_move_bonus": 1,
+    },
 }
