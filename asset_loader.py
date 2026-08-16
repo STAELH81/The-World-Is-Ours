@@ -26,7 +26,7 @@ class AssetLoader:
                 if lower.endswith(".png") or lower.endswith(".jpg") or lower.endswith(".webp"):
                     self._index[lower] = os.path.join(root, name)
 
-    def _load_path(self, path, size):
+    def _load_path(self, path, size, fit=False):
         if not path or not os.path.exists(path):
             return None
         image = pygame.image.load(path)
@@ -34,10 +34,18 @@ class AssetLoader:
             image = image.convert_alpha()
         except pygame.error:
             image = image.convert()
+        if fit:
+            image = self._knockout_black_background(image)
+            image = self._trim_transparent(image)
         return pygame.transform.smoothscale(image, size)
 
-    def _knockout_black_background(self, surf, limit=22):
-        """Turn the black studio backdrop transparent, keep the drawing."""
+    def _knockout_black_background(self, surf, limit=18):
+        """Remove near-black studio backdrop connected to the image edge.
+
+        Transparent pixels count as outside, so leftover black reachable
+        through empty space is cleared. Gray or colored art (any channel
+        above limit) is never removed — a dark horse at ~80 gray stays.
+        """
         if surf is None:
             return None
         try:
@@ -48,13 +56,19 @@ class AssetLoader:
 
         def is_backdrop(px, py):
             color = work.get_at((px, py))
+            alpha = color[3] if len(color) > 3 else 255
+            if alpha <= 8:
+                return True
             return color[0] <= limit and color[1] <= limit and color[2] <= limit
 
         seen = set()
         queue = []
-        for start in ((0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)):
-            if is_backdrop(*start):
-                queue.append(start)
+        for x in range(width):
+            queue.append((x, 0))
+            queue.append((x, height - 1))
+        for y in range(height):
+            queue.append((0, y))
+            queue.append((width - 1, y))
         while queue:
             x, y = queue.pop()
             if (x, y) in seen or not (0 <= x < width and 0 <= y < height):
@@ -62,35 +76,60 @@ class AssetLoader:
             if not is_backdrop(x, y):
                 continue
             seen.add((x, y))
-            work.set_at((x, y), (0, 0, 0, 0))
+            if work.get_at((x, y))[3] > 8:
+                work.set_at((x, y), (0, 0, 0, 0))
             queue.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
         return work
 
-    def _load_named(self, filenames, size):
+    def _trim_transparent(self, surf, pad=2, alpha_min=32):
+        """Crop to the drawing so a small figure in a 128px frame fills the tile."""
+        if surf is None:
+            return None
+        width, height = surf.get_size()
+        min_x, min_y, max_x, max_y = width, height, -1, -1
+        for y in range(height):
+            for x in range(width):
+                if surf.get_at((x, y))[3] > alpha_min:
+                    min_x = min(min_x, x)
+                    min_y = min(min_y, y)
+                    max_x = max(max_x, x)
+                    max_y = max(max_y, y)
+        if max_x < 0:
+            return surf
+        min_x = max(0, min_x - pad)
+        min_y = max(0, min_y - pad)
+        max_x = min(width - 1, max_x + pad)
+        max_y = min(height - 1, max_y + pad)
+        return surf.subsurface(pygame.Rect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)).copy()
+
+    def _load_named(self, filenames, size, fit=False):
         for name in filenames:
             path = os.path.join(self.base_path, name.replace("/", os.sep))
-            loaded = self._load_path(path, size)
+            loaded = self._load_path(path, size, fit=fit)
             if loaded:
                 return loaded
         for name in filenames:
             keyed = os.path.basename(name).lower()
             if keyed in self._index:
-                loaded = self._load_path(self._index[keyed], size)
+                loaded = self._load_path(self._index[keyed], size, fit=fit)
                 if loaded:
                     return loaded
         return None
 
-    def _load_keywords(self, keywords, size):
+    def _load_keywords(self, keywords, size, fit=False):
         for filename, path in self._index.items():
             stem = os.path.splitext(filename)[0]
             if any(word in stem for word in keywords):
-                loaded = self._load_path(path, size)
+                loaded = self._load_path(path, size, fit=fit)
                 if loaded:
                     return loaded
         return None
 
-    def _pick(self, filenames, keywords, size):
-        return self._load_named(filenames, size) or self._load_keywords(keywords, size)
+    def _pick(self, filenames, keywords, size, fit=False):
+        return self._load_named(filenames, size, fit=fit) or self._load_keywords(keywords, size, fit=fit)
+
+    def _sprite(self, filenames, keywords, size):
+        return self._pick(filenames, keywords, size, fit=True)
 
     def _load_all(self):
         tile = (CELL_SIZE, CELL_SIZE)
@@ -137,7 +176,7 @@ class AssetLoader:
             Country.ORANGE: self._pick(["overlay/border_orange.png"], ("border_orange", "orange"), tile),
         }
         self.units = {
-            UnitType.SWORDSMAN: self._pick(
+            UnitType.SWORDSMAN: self._sprite(
                 [
                     "units/unit_swordsman.png",
                     "units/swordsman.png",
@@ -148,7 +187,7 @@ class AssetLoader:
                 ("swordsman", "spadassin", "epee", "sword"),
                 unit,
             ),
-            UnitType.CROSSBOWMAN: self._pick(
+            UnitType.CROSSBOWMAN: self._sprite(
                 [
                     "units/unit_crossbowman.png",
                     "units/crossbowman.png",
@@ -159,7 +198,7 @@ class AssetLoader:
                 ("crossbow", "arbalet", "archer"),
                 unit,
             ),
-            UnitType.SPEARMAN: self._pick(
+            UnitType.SPEARMAN: self._sprite(
                 [
                     "units/unit_spearman.png",
                     "units/unit_lancier.png",
@@ -171,7 +210,7 @@ class AssetLoader:
                 ("spearman", "lancier", "lancer", "pique", "pike"),
                 unit,
             ),
-            UnitType.CAVALRY: self._pick(
+            UnitType.CAVALRY: self._sprite(
                 [
                     "units/unit_cavalry.png",
                     "units/cavalry.png",
@@ -182,7 +221,7 @@ class AssetLoader:
                 ("cavalry", "cavalerie", "horse", "cheval"),
                 unit,
             ),
-            UnitType.CATAPULT: self._pick(
+            UnitType.CATAPULT: self._sprite(
                 [
                     "units/unit_catapult.png",
                     "units/unit_catapulte.png",
@@ -196,18 +235,18 @@ class AssetLoader:
             ),
         }
         self.buildings = {
-            "capital": self._pick(
+            "capital": self._sprite(
                 ["buildings/capital.png", "buildings/palace.png", "capital.png"],
                 ("capital", "palais", "castle", "forteresse"),
                 building,
             ),
-            "city": self._pick(
+            "city": self._sprite(
                 ["buildings/city.png", "buildings/ville.png", "city.png"],
                 ("city", "ville", "town", "village"),
                 (max(18, CELL_SIZE - 12), max(18, CELL_SIZE - 12)),
             ),
         }
-        self.ship = self._pick(
+        self.ship = self._sprite(
             [
                 "units/unit_ship.png",
                 "units/unit_bateau.png",
@@ -219,11 +258,6 @@ class AssetLoader:
             ("ship", "bateau", "navire", "boat", "galere"),
             unit,
         )
-        for key, sprite in list(self.units.items()):
-            self.units[key] = self._knockout_black_background(sprite)
-        self.ship = self._knockout_black_background(self.ship)
-        for key, sprite in list(self.buildings.items()):
-            self.buildings[key] = self._knockout_black_background(sprite)
 
     def summarize(self):
         lines = ["Sprites :"]

@@ -64,9 +64,62 @@ class TileRenderTests(unittest.TestCase):
         self.assertIn("Spadassin", report)
         self.assertIn("Bateau", report)
         self.assertIsNotNone(loader.units[UnitType.SWORDSMAN])
-        self.assertEqual(loader.units[UnitType.SWORDSMAN].get_at((0, 0))[3], 0)
+        self.assertLess(loader.units[UnitType.SWORDSMAN].get_at((0, 0))[3], 40)
         self.assertIsNone(loader.units[UnitType.SPEARMAN])
         self.assertIsNone(loader.ship)
+
+    def test_knockout_keeps_dark_gray_art(self):
+        from asset_loader import AssetLoader
+
+        pygame.display.set_mode((1, 1))
+        loader = AssetLoader("assets")
+        surf = pygame.Surface((32, 32), pygame.SRCALPHA)
+        surf.fill((0, 0, 0, 0))
+        for x in range(32):
+            for y in range(32):
+                if x < 4 or y < 4 or x > 27 or y > 27:
+                    surf.set_at((x, y), (0, 0, 0, 255))
+        for x in range(8, 24):
+            for y in range(8, 24):
+                surf.set_at((x, y), (83, 83, 83, 255))
+        out = loader._knockout_black_background(surf)
+        self.assertEqual(out.get_at((0, 0))[3], 0)
+        self.assertEqual(out.get_at((16, 16))[:3], (83, 83, 83))
+        self.assertEqual(out.get_at((16, 16))[3], 255)
+
+    def test_trim_crops_empty_frame(self):
+        from asset_loader import AssetLoader
+
+        pygame.display.set_mode((1, 1))
+        loader = AssetLoader("assets")
+        surf = pygame.Surface((128, 128), pygame.SRCALPHA)
+        surf.fill((0, 0, 0, 0))
+        for x in range(50, 70):
+            for y in range(40, 90):
+                surf.set_at((x, y), (83, 83, 83, 255))
+        trimmed = loader._trim_transparent(surf)
+        self.assertLessEqual(trimmed.get_width(), 26)
+        self.assertLessEqual(trimmed.get_height(), 56)
+
+    def test_cavalry_png_keeps_gray_and_fills_the_tile(self):
+        from asset_loader import AssetLoader
+
+        pygame.display.set_mode((1, 1))
+        loader = AssetLoader("assets")
+        cavalry = loader.units[UnitType.CAVALRY]
+        self.assertIsNotNone(cavalry)
+        width, height = cavalry.get_size()
+        opaque = 0
+        gray = 0
+        for y in range(height):
+            for x in range(width):
+                color = cavalry.get_at((x, y))
+                if color[3] > 80:
+                    opaque += 1
+                    if 50 <= color[0] <= 120 and abs(color[0] - color[1]) < 20:
+                        gray += 1
+        self.assertGreater(opaque, 150)
+        self.assertGreater(gray, 80)
 
     def test_same_country_tiles_share_one_outer_border(self):
         grid = [[Cell(x, y) for y in range(GRID_ROWS)] for x in range(GRID_COLS)]
