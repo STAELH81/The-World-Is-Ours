@@ -55,6 +55,19 @@ class TileRenderTests(unittest.TestCase):
         draw_army_badge(surf, 0, 0, army, assets=Assets())
         self.assertEqual(surf.get_at((CELL_SIZE // 2, CELL_SIZE // 2 - 1))[:3], (255, 0, 180))
 
+    def test_asset_loader_reports_missing_unit_pngs(self):
+        from asset_loader import AssetLoader
+
+        pygame.display.set_mode((1, 1))
+        loader = AssetLoader("assets")
+        report = loader.summarize()
+        self.assertIn("Spadassin", report)
+        self.assertIn("Bateau", report)
+        self.assertIsNotNone(loader.units[UnitType.SWORDSMAN])
+        self.assertEqual(loader.units[UnitType.SWORDSMAN].get_at((0, 0))[3], 0)
+        self.assertIsNone(loader.units[UnitType.SPEARMAN])
+        self.assertIsNone(loader.ship)
+
     def test_same_country_tiles_share_one_outer_border(self):
         grid = [[Cell(x, y) for y in range(GRID_ROWS)] for x in range(GRID_COLS)]
         for x in range(2, 5):

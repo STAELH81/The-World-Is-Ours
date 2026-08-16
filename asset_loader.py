@@ -29,8 +29,42 @@ class AssetLoader:
     def _load_path(self, path, size):
         if not path or not os.path.exists(path):
             return None
-        image = pygame.image.load(path).convert_alpha()
+        image = pygame.image.load(path)
+        try:
+            image = image.convert_alpha()
+        except pygame.error:
+            image = image.convert()
         return pygame.transform.smoothscale(image, size)
+
+    def _knockout_black_background(self, surf, limit=22):
+        """Turn the black studio backdrop transparent, keep the drawing."""
+        if surf is None:
+            return None
+        try:
+            work = surf.convert_alpha()
+        except pygame.error:
+            work = surf.copy()
+        width, height = work.get_size()
+
+        def is_backdrop(px, py):
+            color = work.get_at((px, py))
+            return color[0] <= limit and color[1] <= limit and color[2] <= limit
+
+        seen = set()
+        queue = []
+        for start in ((0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)):
+            if is_backdrop(*start):
+                queue.append(start)
+        while queue:
+            x, y = queue.pop()
+            if (x, y) in seen or not (0 <= x < width and 0 <= y < height):
+                continue
+            if not is_backdrop(x, y):
+                continue
+            seen.add((x, y))
+            work.set_at((x, y), (0, 0, 0, 0))
+            queue.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
+        return work
 
     def _load_named(self, filenames, size):
         for name in filenames:
@@ -104,27 +138,57 @@ class AssetLoader:
         }
         self.units = {
             UnitType.SWORDSMAN: self._pick(
-                ["units/unit_swordsman.png", "units/swordsman.png", "swordsman.png"],
+                [
+                    "units/unit_swordsman.png",
+                    "units/swordsman.png",
+                    "units/spadassin.png",
+                    "swordsman.png",
+                    "spadassin.png",
+                ],
                 ("swordsman", "spadassin", "epee", "sword"),
                 unit,
             ),
             UnitType.CROSSBOWMAN: self._pick(
-                ["units/unit_crossbowman.png", "units/crossbowman.png", "crossbowman.png"],
+                [
+                    "units/unit_crossbowman.png",
+                    "units/crossbowman.png",
+                    "units/arbaletrier.png",
+                    "units/arbalete.png",
+                    "crossbowman.png",
+                ],
                 ("crossbow", "arbalet", "archer"),
                 unit,
             ),
             UnitType.SPEARMAN: self._pick(
-                ["units/unit_spearman.png", "units/spearman.png", "spearman.png"],
+                [
+                    "units/unit_spearman.png",
+                    "units/spearman.png",
+                    "units/lancier.png",
+                    "spearman.png",
+                    "lancier.png",
+                ],
                 ("spearman", "lancier", "pique", "pike"),
                 unit,
             ),
             UnitType.CAVALRY: self._pick(
-                ["units/unit_cavalry.png", "units/cavalry.png", "cavalry.png"],
+                [
+                    "units/unit_cavalry.png",
+                    "units/cavalry.png",
+                    "units/cavalerie.png",
+                    "cavalry.png",
+                    "cavalerie.png",
+                ],
                 ("cavalry", "cavalerie", "horse", "cheval"),
                 unit,
             ),
             UnitType.CATAPULT: self._pick(
-                ["units/unit_catapult.png", "units/catapult.png", "catapult.png"],
+                [
+                    "units/unit_catapult.png",
+                    "units/catapult.png",
+                    "units/catapulte.png",
+                    "catapult.png",
+                    "catapulte.png",
+                ],
                 ("catapult", "catapulte", "siege", "trebuchet"),
                 unit,
             ),
@@ -146,3 +210,27 @@ class AssetLoader:
             ("ship", "bateau", "navire", "boat", "galere"),
             unit,
         )
+        for key, sprite in list(self.units.items()):
+            self.units[key] = self._knockout_black_background(sprite)
+        self.ship = self._knockout_black_background(self.ship)
+        for key, sprite in list(self.buildings.items()):
+            self.buildings[key] = self._knockout_black_background(sprite)
+
+    def summarize(self):
+        lines = ["Sprites :"]
+        for unit_type, label in (
+            (UnitType.SWORDSMAN, "Spadassin"),
+            (UnitType.SPEARMAN, "Lancier"),
+            (UnitType.CROSSBOWMAN, "Arbalétrier"),
+            (UnitType.CAVALRY, "Cavalerie"),
+            (UnitType.CATAPULT, "Catapulte"),
+        ):
+            found = "PNG" if self.units.get(unit_type) else "dessin par défaut"
+            lines.append(f"  {label}: {found}")
+        lines.append(f"  Bateau: {'PNG' if self.ship else 'dessin par défaut'}")
+        for key, label in (("capital", "Capitale"), ("city", "Ville")):
+            found = "PNG" if self.buildings.get(key) else "dessin par défaut"
+            lines.append(f"  {label}: {found}")
+        text = "\n".join(lines)
+        print(text)
+        return text

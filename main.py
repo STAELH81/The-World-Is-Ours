@@ -31,6 +31,7 @@ class Game:
         self.running = True
         self.settings = load_settings()
         self.assets = AssetLoader("assets")
+        self.assets.summarize()
         self.audio = AudioManager(volume=self.settings["volume"])
         self.tutorial = Tutorial()
         self.pause_menu = PauseMenu(self.screen)
