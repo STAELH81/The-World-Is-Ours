@@ -38,12 +38,11 @@ class AssetLoader:
             image = self._knockout_black_background(image)
         return pygame.transform.smoothscale(image, size)
 
-    def _knockout_black_background(self, surf, limit=18):
-        """Remove near-black studio backdrop connected to the image edge.
+    def _knockout_black_background(self, surf, limit=8):
+        """Remove opaque studio black touching the image edge.
 
-        Transparent pixels count as outside, so leftover black reachable
-        through empty space is cleared. Gray or colored art (any channel
-        above limit) is never removed — a dark horse at ~80 gray stays.
+        Transparent pixels are not a bridge: a dark horse on an already
+        cleared background must not be flood-filled away.
         """
         if surf is None:
             return None
@@ -53,12 +52,10 @@ class AssetLoader:
             work = surf.copy()
         width, height = work.get_size()
 
-        def is_backdrop(px, py):
+        def is_opaque_studio_black(px, py):
             color = work.get_at((px, py))
             alpha = color[3] if len(color) > 3 else 255
-            if alpha <= 8:
-                return True
-            return color[0] <= limit and color[1] <= limit and color[2] <= limit
+            return alpha > 200 and color[0] <= limit and color[1] <= limit and color[2] <= limit
 
         seen = set()
         queue = []
@@ -72,11 +69,10 @@ class AssetLoader:
             x, y = queue.pop()
             if (x, y) in seen or not (0 <= x < width and 0 <= y < height):
                 continue
-            if not is_backdrop(x, y):
+            if not is_opaque_studio_black(x, y):
                 continue
             seen.add((x, y))
-            if work.get_at((x, y))[3] > 8:
-                work.set_at((x, y), (0, 0, 0, 0))
+            work.set_at((x, y), (0, 0, 0, 0))
             queue.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
         return work
 

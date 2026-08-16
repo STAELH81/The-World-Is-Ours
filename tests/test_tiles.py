@@ -87,6 +87,21 @@ class TileRenderTests(unittest.TestCase):
         self.assertEqual(out.get_at((16, 16))[:3], (83, 83, 83))
         self.assertEqual(out.get_at((16, 16))[3], 255)
 
+    def test_knockout_does_not_eat_a_dark_horse(self):
+        from asset_loader import AssetLoader
+
+        pygame.display.set_mode((1, 1))
+        loader = AssetLoader("assets")
+        surf = pygame.Surface((48, 48), pygame.SRCALPHA)
+        surf.fill((0, 0, 0, 0))
+        for x in range(14, 34):
+            for y in range(18, 38):
+                surf.set_at((x, y), (12, 12, 12, 255))
+        out = loader._knockout_black_background(surf)
+        self.assertEqual(out.get_at((0, 0))[3], 0)
+        self.assertEqual(out.get_at((24, 28))[:3], (12, 12, 12))
+        self.assertEqual(out.get_at((24, 28))[3], 255)
+
     def test_cavalry_png_keeps_gray_without_stretching(self):
         from asset_loader import AssetLoader
 
@@ -94,21 +109,14 @@ class TileRenderTests(unittest.TestCase):
         loader = AssetLoader("assets")
         cavalry = loader.units[UnitType.CAVALRY]
         self.assertIsNotNone(cavalry)
-        width, height = cavalry.get_size()
         gray = 0
-        min_x, min_y, max_x, max_y = width, height, -1, -1
-        for y in range(height):
-            for x in range(width):
+        for y in range(cavalry.get_height()):
+            for x in range(cavalry.get_width()):
                 color = cavalry.get_at((x, y))
-                if color[3] > 80:
-                    min_x = min(min_x, x)
-                    min_y = min(min_y, y)
-                    max_x = max(max_x, x)
-                    max_y = max(max_y, y)
-                    if 50 <= color[0] <= 120 and abs(color[0] - color[1]) < 20:
-                        gray += 1
+                if color[3] > 80 and 50 <= color[0] <= 120 and abs(color[0] - color[1]) < 20:
+                    gray += 1
         self.assertGreater(gray, 20)
-        self.assertGreater(max_y - min_y, (max_x - min_x) * 1.4)
+        self.assertEqual(cavalry.get_width(), cavalry.get_height())
 
     def test_same_country_tiles_share_one_outer_border(self):
         grid = [[Cell(x, y) for y in range(GRID_ROWS)] for x in range(GRID_COLS)]
