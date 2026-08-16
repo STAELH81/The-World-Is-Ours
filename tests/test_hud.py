@@ -57,7 +57,7 @@ class HudLayoutTests(unittest.TestCase):
         self.assertTrue(ctx["can_recruit"])
         self.assertFalse(ctx["can_build_city"])
         self.assertFalse(ctx["can_build_bridge"])
-        self.assertEqual(len(ui.layout(game)[1]), 3)
+        self.assertEqual(len(ui.layout(game)[1]), 5)
 
     def test_selected_army_does_not_show_the_old_button_wall(self):
         pygame.font.init()

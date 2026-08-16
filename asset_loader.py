@@ -59,7 +59,7 @@ class AssetLoader:
 
     def _load_all(self):
         tile = (CELL_SIZE, CELL_SIZE)
-        unit = (max(20, CELL_SIZE - 10), max(20, CELL_SIZE - 10))
+        unit = (max(26, CELL_SIZE - 4), max(26, CELL_SIZE - 4))
         building = (max(22, CELL_SIZE - 8), max(22, CELL_SIZE - 8))
 
         self.terrain = {
@@ -112,9 +112,19 @@ class AssetLoader:
                 ("crossbow", "arbalet", "archer"),
                 unit,
             ),
+            UnitType.SPEARMAN: self._pick(
+                ["units/unit_spearman.png", "units/spearman.png", "spearman.png"],
+                ("spearman", "lancier", "pique", "pike"),
+                unit,
+            ),
             UnitType.CAVALRY: self._pick(
                 ["units/unit_cavalry.png", "units/cavalry.png", "cavalry.png"],
                 ("cavalry", "cavalerie", "horse", "cheval"),
+                unit,
+            ),
+            UnitType.CATAPULT: self._pick(
+                ["units/unit_catapult.png", "units/catapult.png", "catapult.png"],
+                ("catapult", "catapulte", "siege", "trebuchet"),
                 unit,
             ),
         }

@@ -32,8 +32,10 @@ class UI:
         self.btn_build_city = Button(0, 0, 200, 34, "Fonder une ville")
         self.btn_build_bridge = Button(0, 0, 160, 34, "Pont")
         self.btn_recruit_swordsman = Button(0, 0, 130, 34, "Spadassin")
+        self.btn_recruit_spearman = Button(0, 0, 120, 34, "Lancier")
         self.btn_recruit_crossbowman = Button(0, 0, 140, 34, "Arbalétrier")
         self.btn_recruit_cavalry = Button(0, 0, 130, 34, "Cavalerie")
+        self.btn_recruit_catapult = Button(0, 0, 130, 34, "Catapulte")
 
     def _place(self, button, x, y, w=None):
         if w is not None:
@@ -100,7 +102,7 @@ class UI:
             if cell.army.embarked:
                 info["hint"] = f"{name} en mer. Clique une plage ou une terre pour débarquer."
             else:
-                info["hint"] = f"{name}. Survole une case verte : tu vois où l'armée s'arrête."
+                info["hint"] = f"{name}. Les cases vertes sont ta portée. Survole pour voir l'arrêt."
         elif info["can_recruit"]:
             info["hint"] = "Cette ville peut produire une unité ce tour."
         elif info["already_recruited"]:
@@ -145,11 +147,19 @@ class UI:
         if ctx["can_beach_land"]:
             buttons.append(self.btn_disembark)
         if ctx["can_recruit"]:
-            self.btn_recruit_swordsman.text = f"Spadassin  {player.unit_cost(UnitType.SWORDSMAN)}"
+            self.btn_recruit_swordsman.text = f"Spada  {player.unit_cost(UnitType.SWORDSMAN)}"
+            self.btn_recruit_spearman.text = f"Lancier  {player.unit_cost(UnitType.SPEARMAN)}"
             self.btn_recruit_crossbowman.text = f"Arbalète  {player.unit_cost(UnitType.CROSSBOWMAN)}"
-            self.btn_recruit_cavalry.text = f"Cavalerie  {player.unit_cost(UnitType.CAVALRY)}"
+            self.btn_recruit_cavalry.text = f"Caval.  {player.unit_cost(UnitType.CAVALRY)}"
+            self.btn_recruit_catapult.text = f"Catap.  {player.unit_cost(UnitType.CATAPULT)}"
             buttons.extend(
-                [self.btn_recruit_swordsman, self.btn_recruit_crossbowman, self.btn_recruit_cavalry]
+                [
+                    self.btn_recruit_swordsman,
+                    self.btn_recruit_spearman,
+                    self.btn_recruit_crossbowman,
+                    self.btn_recruit_cavalry,
+                    self.btn_recruit_catapult,
+                ]
             )
         if ctx["can_build_city"]:
             self.btn_build_city.text = f"Fonder une ville  {CITY_COST}"
@@ -160,7 +170,7 @@ class UI:
 
         extra = 38 if len(buttons) > 3 else 0
         panel_h = 58 if not ctx["cell"] else 96 + extra
-        panel_w = min(500, WINDOW_WIDTH - 230)
+        panel_w = min(620, WINDOW_WIDTH - 230)
         self.context_rect = pygame.Rect(8, WINDOW_HEIGHT - panel_h - 8, panel_w, panel_h)
         x = self.context_rect.x + 14
         y = self.context_rect.bottom - 44
@@ -295,10 +305,14 @@ class UI:
         if ctx["can_recruit"]:
             if self.btn_recruit_swordsman.handle_event(event):
                 return ("recruit", UnitType.SWORDSMAN)
+            if self.btn_recruit_spearman.handle_event(event):
+                return ("recruit", UnitType.SPEARMAN)
             if self.btn_recruit_crossbowman.handle_event(event):
                 return ("recruit", UnitType.CROSSBOWMAN)
             if self.btn_recruit_cavalry.handle_event(event):
                 return ("recruit", UnitType.CAVALRY)
+            if self.btn_recruit_catapult.handle_event(event):
+                return ("recruit", UnitType.CATAPULT)
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.blocks_map(event.pos):
             return "hud_click"
         return None

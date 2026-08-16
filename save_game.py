@@ -66,6 +66,7 @@ def save_game(game):
                     "capital_owner": _enum_name(cell.capital_owner),
                     "city_owner": _enum_name(cell.city_owner),
                     "last_recruit_turn": cell.last_recruit_turn,
+                    "garrison_ready": getattr(cell, "garrison_ready", True),
                     "discovered_by": [_enum_name(c) for c in cell.discovered_by],
                     "army": _serialize_army(cell.army),
                 }
@@ -177,6 +178,7 @@ def _apply_payload(game, payload):
             cell.capital_owner = _enum_from_name(Country, data["capital_owner"])
             cell.city_owner = _enum_from_name(Country, data["city_owner"])
             cell.last_recruit_turn = data.get("last_recruit_turn", -1)
+            cell.garrison_ready = data.get("garrison_ready", True)
             cell.discovered_by = {_enum_from_name(Country, n) for n in data.get("discovered_by", [])}
             cell.army = _deserialize_army(data.get("army"))
 

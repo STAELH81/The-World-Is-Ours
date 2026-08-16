@@ -29,12 +29,12 @@ Quand un royaume n’a plus d’armées ni de villes/capitales sur son territoir
 | Sélectionner une armée | Clic gauche : la portée s’affiche tout de suite |
 | Déplacer | Survole une case **verte** : le fantôme et « Arrêt » montrent où l’armée s’arrête. Clique pour y aller. |
 | Attaquer | Clic sur une case **rouge** |
-| Tir à distance | Clic sur une case **violette** (arbalétrier) |
+| Tir à distance | Clic sur une case **violette** (arbalétrier ou catapulte) |
 | Embarquer | Clic sur une case d’eau **bleue** |
 | Débarquer | Clic sur une terre ou une plage **verte** |
 | Pont | Case **dorée** (détroit seulement) |
 | Annuler l’ordre | Clic droit ou **Échap** |
-| Recruter | Clique une ville, puis Spadassin / Arbalète / Cavalerie |
+| Recruter | Clique une ville, puis Lancier / Spadassin / Arbalète / Cavalerie / Catapulte |
 | Construire | Case libre : fonder une ville |
 | Fortifier | Bouton dans le panneau du bas |
 | Recherche tech | Bouton en haut à droite |
@@ -52,6 +52,18 @@ L’interface vise un look *Civilization* précoce : bois, or, parchemin. La fen
 Les plages se **marchent à pied**. On n’embarque qu’en cliquant une case d’**eau**. Un navire reste sur l’eau ou un pont ; il débarque sur une terre ou une plage. Un pont ne se construit que sur un **détroit** (eau coincée entre deux terres), pas le long d’une plage.
 
 Plaine, plage, pont et mer coûtent **1 PM**. Forêt et montagne coûtent **2 PM**. L’IA ne construit un pont que si aucune route terrestre n’atteint une capitale ennemie.
+
+## Unités
+
+| Unité | Rôle |
+|--------|------|
+| Lancier | Bonne défense, fort contre la cavalerie. Garnison des villes. |
+| Spadassin | Combat général, bat arbalète et lancier. |
+| Arbalétrier | Tir à distance. |
+| Cavalerie | Rapide, bon attaquant. |
+| Catapulte | Lente et chère. Bonus contre les murs, bombardement. |
+
+Une **ville** ou **capitale** ennemie a des murs et une garnison de lanciers. Marcher dessus, c’est un assaut, pas une promenade.
 
 ## Traits des royaumes
 
@@ -82,7 +94,7 @@ La partie est enregistrée automatiquement à chaque fin de tour dans `saves/lat
 Place tes PNG dans `assets/` : le jeu les charge tout seul (plusieurs noms de fichiers marchent, ex. `city.png`, `ville.png`, `capital.png`).
 
 - `assets/terrain/` — plaine, forêt, montagne, eau, plage, pont
-- `assets/units/` — spadassin, arbalétrier, cavalerie
+- `assets/units/` — spadassin, arbalétrier, cavalerie, lancier, catapulte
 - `assets/buildings/` — **capitale**, **ville**
 
 Sans fichier, le jeu dessine le terrain à la main.

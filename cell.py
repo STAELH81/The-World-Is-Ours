@@ -32,6 +32,7 @@ class Cell:
         self.capital_owner = Country.NONE
         self.city_owner = Country.NONE
         self.last_recruit_turn = -1
+        self.garrison_ready = True
 
     def draw(self, surface, assets=None, show_units=True, tick=0, grid=None):
         screen_x, screen_y = cell_screen_pos(self.x, self.y)

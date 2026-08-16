@@ -112,23 +112,31 @@ class UnitType(Enum):
     SWORDSMAN = 0
     CROSSBOWMAN = 1
     CAVALRY = 2
+    SPEARMAN = 3
+    CATAPULT = 4
 
 
 UNIT_NAMES = {
     UnitType.SWORDSMAN: "Spadassin",
     UnitType.CROSSBOWMAN: "Arbalétrier",
     UnitType.CAVALRY: "Cavalerie",
+    UnitType.SPEARMAN: "Lancier",
+    UnitType.CATAPULT: "Catapulte",
 }
 UNIT_LETTERS = {
     UnitType.SWORDSMAN: "S",
     UnitType.CROSSBOWMAN: "A",
     UnitType.CAVALRY: "C",
+    UnitType.SPEARMAN: "L",
+    UnitType.CATAPULT: "P",
 }
 
 UNIT_COSTS = {
     UnitType.SWORDSMAN: 40,
     UnitType.CROSSBOWMAN: 55,
     UnitType.CAVALRY: 70,
+    UnitType.SPEARMAN: 35,
+    UnitType.CATAPULT: 90,
 }
 MAX_UNITS_PER_ARMY = 16
 UNIT_UPKEEP = 5
@@ -140,11 +148,17 @@ CITY_TERRITORY_REQUIREMENT = 25
 BRIDGE_COST = 90
 EMBARK_COST = 50
 SHIP_MOVEMENT_RANGE = 5
+CITY_GARRISON_COUNT = 3
+CAPITAL_GARRISON_COUNT = 5
+CITY_WALL_BONUS = 2
+CAPITAL_WALL_BONUS = 3
 
 UNIT_STATS = {
     UnitType.SWORDSMAN: {"attack": 3, "defense": 4},
     UnitType.CROSSBOWMAN: {"attack": 3, "defense": 2},
     UnitType.CAVALRY: {"attack": 4, "defense": 3},
+    UnitType.SPEARMAN: {"attack": 2, "defense": 5},
+    UnitType.CATAPULT: {"attack": 4, "defense": 1},
 }
 
 MOVEMENT_RANGE = 3
@@ -152,9 +166,12 @@ UNIT_MOVEMENT_RANGE = {
     UnitType.SWORDSMAN: 2,
     UnitType.CROSSBOWMAN: 3,
     UnitType.CAVALRY: 4,
+    UnitType.SPEARMAN: 2,
+    UnitType.CATAPULT: 2,
 }
 UNIT_RANGED_RANGE = {
     UnitType.CROSSBOWMAN: 2,
+    UnitType.CATAPULT: 2,
 }
 RANGED_BASE_DAMAGE = 4
 FORTIFY_DEFENSE_BONUS = 1

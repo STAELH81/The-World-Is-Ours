@@ -76,6 +76,7 @@ class MapGenerator:
                 cell.capital_owner = Country.NONE
                 cell.city_owner = Country.NONE
                 cell.last_recruit_turn = -1
+                cell.garrison_ready = True
                 cell.discovered_by = set()
 
     def _pick_island_center(self, existing):

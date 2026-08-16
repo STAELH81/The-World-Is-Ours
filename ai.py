@@ -123,13 +123,27 @@ class AI:
                 return None
             return cell.army.unit_type
 
+        if self._needs_siege(country) and player.gold >= player.unit_cost(UnitType.CATAPULT):
+            if random.random() < 0.5:
+                return UnitType.CATAPULT
         if player.gold >= player.unit_cost(UnitType.CAVALRY):
             return UnitType.CAVALRY
         if player.gold >= player.unit_cost(UnitType.CROSSBOWMAN):
             return UnitType.CROSSBOWMAN
+        if player.gold >= player.unit_cost(UnitType.SPEARMAN):
+            return UnitType.SPEARMAN
         if player.gold >= player.unit_cost(UnitType.SWORDSMAN):
             return UnitType.SWORDSMAN
         return None
+
+    def _needs_siege(self, country):
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = self.game.grid[x][y]
+                if (cell.is_city or cell.is_capital) and cell.country not in (country, Country.NONE):
+                    if self.is_target_allowed(country, cell.country):
+                        return True
+        return False
 
     def _move_armies(self, country):
         armies = []
@@ -146,7 +160,7 @@ class AI:
             while army_cell.army and army_cell.army.movement_left > 0 and step_guard < 4:
                 step_guard += 1
                 army = army_cell.army
-                if army.unit_type == UnitType.CROSSBOWMAN:
+                if army.unit_type in UNIT_RANGED_RANGE:
                     target = self._best_ranged_target(army_cell, country)
                     if target:
                         self.game.ranged_attack(army_cell, target)

@@ -12,7 +12,7 @@ TUTORIAL_STEPS = [
     ),
     (
         "Tes unités",
-        "Clique une armée. Survole une case verte : le fantôme montre où elle s'arrête.",
+        "Clique une armée. Les cases vertes bordées, c'est ta portée. Survole : le fantôme montre l'arrêt.",
     ),
     (
         "La boucle du tour",
@@ -20,7 +20,7 @@ TUTORIAL_STEPS = [
     ),
     (
         "Villes",
-        "Clique une ville pour produire. Une seule unité par ville et par tour.",
+        "Clique une ville pour produire (lancier, spadassin, arbalète, cavalerie, catapulte). Une ville ennemie a des murs et une garnison : on ne la prend pas en marchant dessus.",
     ),
 ]
 

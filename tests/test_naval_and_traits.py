@@ -226,6 +226,46 @@ class NavalAndTraitTests(unittest.TestCase):
         self.assertEqual(city.army.count, 3)
         self.assertEqual(city.army.country, Country.RED)
 
+    def test_empty_enemy_city_raises_garrison(self):
+        game = make_stub_game()
+        city = game.grid[6][8]
+        start = game.grid[6][7]
+        city.terrain = TerrainType.PLAIN
+        start.terrain = TerrainType.PLAIN
+        city.country = Country.GREEN
+        city.is_city = True
+        city.city_owner = Country.GREEN
+        city.army = None
+        start.country = Country.RED
+        start.army = Army(Country.RED, UnitType.CAVALRY, 1)
+        start.army.refresh_movement(game.players[Country.RED])
+        game.move_army(start, city)
+        self.assertIsNone(start.army)
+        self.assertIsNotNone(city.army)
+        self.assertEqual(city.army.country, Country.GREEN)
+        self.assertEqual(city.country, Country.GREEN)
+        self.assertEqual(city.army.unit_type, UnitType.SPEARMAN)
+        self.assertGreaterEqual(city.army.count, 2)
+
+    def test_catapult_can_storm_a_city(self):
+        game = make_stub_game()
+        city = game.grid[6][8]
+        start = game.grid[6][7]
+        city.terrain = TerrainType.PLAIN
+        start.terrain = TerrainType.PLAIN
+        city.country = Country.GREEN
+        city.is_city = True
+        city.city_owner = Country.GREEN
+        city.army = None
+        start.country = Country.RED
+        start.army = Army(Country.RED, UnitType.CATAPULT, 6)
+        start.army.refresh_movement(game.players[Country.RED])
+        game.move_army(start, city)
+        self.assertIsNone(start.army)
+        self.assertIsNotNone(city.army)
+        self.assertEqual(city.army.country, Country.RED)
+        self.assertEqual(city.country, Country.RED)
+
     def test_red_swords_are_cheaper_and_hit_harder(self):
         red = Player(Country.RED)
         green = Player(Country.GREEN)

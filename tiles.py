@@ -2,7 +2,7 @@
 
 import pygame
 from constants import *
-from theme import CREAM, GOLD, INK, PARCHMENT, WOOD_DARK, blit_outlined, load_font
+from theme import CREAM, GOLD, INK, PARCHMENT, WOOD_DARK, load_font
 
 _TERRAIN = {}
 _UNITS = {}
@@ -91,43 +91,67 @@ def terrain_surface(terrain, variant=0):
 
 def _figure(surf, cx, cy, unit_type, color):
     skin = (236, 214, 176)
-    pygame.draw.circle(surf, skin, (cx, cy - 7), 4)
-    pygame.draw.circle(surf, INK, (cx, cy - 7), 4, 1)
-    pygame.draw.rect(surf, color, (cx - 4, cy - 3, 8, 9))
-    pygame.draw.rect(surf, INK, (cx - 4, cy - 3, 8, 9), 1)
+    if unit_type == UnitType.CATAPULT:
+        pygame.draw.rect(surf, (92, 62, 32), (cx - 12, cy + 2, 24, 9))
+        pygame.draw.rect(surf, INK, (cx - 12, cy + 2, 24, 9), 2)
+        pygame.draw.rect(surf, color, (cx - 10, cy + 4, 8, 5))
+        pygame.draw.line(surf, WOOD_DARK, (cx - 6, cy + 4), (cx + 11, cy - 12), 3)
+        pygame.draw.circle(surf, (90, 90, 96), (cx + 12, cy - 13), 5)
+        pygame.draw.circle(surf, INK, (cx + 12, cy - 13), 5, 2)
+        return
+    pygame.draw.circle(surf, skin, (cx, cy - 9), 6)
+    pygame.draw.circle(surf, INK, (cx, cy - 9), 6, 2)
+    pygame.draw.rect(surf, color, (cx - 6, cy - 4, 12, 13))
+    pygame.draw.rect(surf, INK, (cx - 6, cy - 4, 12, 13), 2)
     if unit_type == UnitType.SWORDSMAN:
-        pygame.draw.line(surf, (210, 210, 218), (cx + 6, cy - 10), (cx + 6, cy + 6), 2)
-        pygame.draw.line(surf, GOLD, (cx + 3, cy - 2), (cx + 9, cy - 2), 2)
-        pygame.draw.circle(surf, (160, 160, 168), (cx - 6, cy + 1), 4)
-        pygame.draw.circle(surf, color, (cx - 6, cy + 1), 4, 1)
+        pygame.draw.line(surf, (230, 230, 236), (cx + 8, cy - 14), (cx + 8, cy + 8), 3)
+        pygame.draw.line(surf, GOLD, (cx + 4, cy - 2), (cx + 12, cy - 2), 3)
+        pygame.draw.circle(surf, (168, 168, 176), (cx - 8, cy + 2), 6)
+        pygame.draw.circle(surf, INK, (cx - 8, cy + 2), 6, 2)
+        pygame.draw.circle(surf, color, (cx - 8, cy + 2), 4)
     elif unit_type == UnitType.CROSSBOWMAN:
-        pygame.draw.arc(surf, CREAM, (cx - 2, cy - 8, 16, 14), 0.4, 2.6, 2)
-        pygame.draw.line(surf, GOLD, (cx, cy), (cx + 10, cy + 1), 2)
-        pygame.draw.circle(surf, CREAM, (cx + 10, cy + 1), 2)
+        pygame.draw.arc(surf, CREAM, (cx - 2, cy - 12, 18, 16), 0.35, 2.7, 3)
+        pygame.draw.line(surf, GOLD, (cx, cy + 1), (cx + 12, cy + 2), 3)
+        pygame.draw.circle(surf, CREAM, (cx + 12, cy + 2), 3)
+        pygame.draw.circle(surf, INK, (cx + 12, cy + 2), 3, 1)
+    elif unit_type == UnitType.SPEARMAN:
+        pygame.draw.line(surf, (186, 150, 88), (cx + 8, cy + 10), (cx + 8, cy - 16), 3)
+        pygame.draw.polygon(surf, (210, 210, 218), [(cx + 8, cy - 18), (cx + 4, cy - 10), (cx + 12, cy - 10)])
+        pygame.draw.circle(surf, (168, 168, 176), (cx - 8, cy + 3), 5)
+        pygame.draw.circle(surf, INK, (cx - 8, cy + 3), 5, 2)
     else:
-        pygame.draw.ellipse(surf, (92, 62, 36), (cx - 11, cy - 1, 20, 11))
-        pygame.draw.circle(surf, (92, 62, 36), (cx + 8, cy - 2), 4)
-        pygame.draw.rect(surf, color, (cx - 3, cy - 8, 7, 8))
-        pygame.draw.circle(surf, skin, (cx, cy - 10), 3)
-        pygame.draw.line(surf, INK, (cx - 6, cy + 9), (cx - 6, cy + 3), 2)
-        pygame.draw.line(surf, INK, (cx + 5, cy + 9), (cx + 5, cy + 3), 2)
+        pygame.draw.ellipse(surf, (92, 62, 36), (cx - 14, cy - 2, 26, 14))
+        pygame.draw.ellipse(surf, INK, (cx - 14, cy - 2, 26, 14), 2)
+        pygame.draw.circle(surf, (92, 62, 36), (cx + 10, cy - 3), 5)
+        pygame.draw.rect(surf, color, (cx - 5, cy - 10, 10, 10))
+        pygame.draw.rect(surf, INK, (cx - 5, cy - 10, 10, 10), 1)
+        pygame.draw.circle(surf, skin, (cx, cy - 12), 4)
+        pygame.draw.circle(surf, INK, (cx, cy - 12), 4, 1)
+        pygame.draw.line(surf, INK, (cx - 8, cy + 11), (cx - 8, cy + 4), 3)
+        pygame.draw.line(surf, INK, (cx + 6, cy + 11), (cx + 6, cy + 4), 3)
 
 
 def _ship(surf, cx, cy):
     pygame.draw.polygon(
         surf,
         (92, 64, 36),
-        [(cx - 12, cy + 2), (cx + 12, cy + 2), (cx + 8, cy + 9), (cx - 8, cy + 9)],
+        [(cx - 14, cy + 2), (cx + 14, cy + 2), (cx + 10, cy + 11), (cx - 10, cy + 11)],
     )
-    pygame.draw.line(surf, INK, (cx, cy + 2), (cx, cy - 10), 2)
-    pygame.draw.polygon(surf, CREAM, [(cx, cy - 11), (cx + 10, cy - 3), (cx, cy + 1)])
-    pygame.draw.polygon(surf, INK, [(cx, cy - 11), (cx + 10, cy - 3), (cx, cy + 1)], 1)
+    pygame.draw.polygon(
+        surf,
+        INK,
+        [(cx - 14, cy + 2), (cx + 14, cy + 2), (cx + 10, cy + 11), (cx - 10, cy + 11)],
+        2,
+    )
+    pygame.draw.line(surf, INK, (cx, cy + 2), (cx, cy - 12), 3)
+    pygame.draw.polygon(surf, CREAM, [(cx, cy - 13), (cx + 12, cy - 3), (cx, cy + 2)])
+    pygame.draw.polygon(surf, INK, [(cx, cy - 13), (cx + 12, cy - 3), (cx, cy + 2)], 1)
 
 
 def _make_unit(unit_type, country, embarked):
     surf = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
     color = COUNTRY_COLORS[country]
-    cx, cy = CELL_SIZE // 2, CELL_SIZE // 2 + 2
+    cx, cy = CELL_SIZE // 2, CELL_SIZE // 2 + 1
     if embarked:
         _ship(surf, cx, cy)
     else:
@@ -144,24 +168,31 @@ def unit_surface(army):
     return cached
 
 
+def _draw_unit_base(surface, screen_x, screen_y, color):
+    cx = screen_x + CELL_SIZE // 2
+    by = screen_y + CELL_SIZE - 12
+    pygame.draw.ellipse(surface, (16, 10, 6), (cx - 16, by + 2, 32, 11))
+    pygame.draw.ellipse(surface, color, (cx - 15, by, 30, 11))
+    pygame.draw.ellipse(surface, INK, (cx - 15, by, 30, 11), 2)
+
+
 def draw_army_badge(surface, screen_x, screen_y, army, assets=None):
+    color = COUNTRY_COLORS[army.country]
+    _draw_unit_base(surface, screen_x, screen_y, color)
     sprite = assets.units.get(army.unit_type) if assets else None
     cx = screen_x + CELL_SIZE // 2
-    cy = screen_y + CELL_SIZE // 2 + 1
+    cy = screen_y + CELL_SIZE // 2 - 1
     if sprite and not army.embarked:
         surface.blit(sprite, sprite.get_rect(center=(cx, cy)))
     else:
         surface.blit(unit_surface(army), (screen_x, screen_y))
     count = str(army.count)
-    count_font = load_font(13, bold=True)
-    blit_outlined(
-        surface,
-        count_font,
-        count,
-        CREAM,
-        INK,
-        (screen_x + CELL_SIZE - 4 - count_font.size(count)[0], screen_y + CELL_SIZE - 16),
-    )
+    count_font = load_font(14, bold=True)
+    tw, th = count_font.size(count)
+    badge = pygame.Rect(screen_x + CELL_SIZE - tw - 8, screen_y + CELL_SIZE - th - 5, tw + 6, th + 3)
+    pygame.draw.rect(surface, color, badge, border_radius=3)
+    pygame.draw.rect(surface, INK, badge, 1, border_radius=3)
+    surface.blit(count_font.render(count, True, CREAM), (badge.x + 3, badge.y + 1))
 
 
 def draw_city(surface, cell, screen_x, screen_y, compact=False, assets=None):

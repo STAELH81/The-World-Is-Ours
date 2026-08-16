@@ -279,6 +279,9 @@ class Game:
             return
         move_cost = self.path_move_cost(path_cells, army)
 
+        if self.is_enemy_urban(to_cell, army.country) and not army.embarked:
+            self.ensure_city_garrison(to_cell)
+
         # Si case ennemie avec armée → COMBAT
         if to_cell.army and to_cell.army.country != self.current_player_country:
             if army.embarked and not to_cell.army.embarked:
@@ -319,9 +322,16 @@ class Game:
             and to_cell.country != Country.NONE
             and to_cell.country != self.current_player_country
         ):
-            self.record_aggression(self.current_player_country, to_cell.country)
-            self.log_event(f"Conquête de {COUNTRY_NAMES[to_cell.country]}")
-            to_cell.country = self.current_player_country
+            if to_cell.is_city or to_cell.is_capital:
+                self.record_aggression(self.current_player_country, to_cell.country)
+                kind = "Capitale" if to_cell.is_capital else "Ville"
+                self.log_event(f"{kind} prise")
+                to_cell.country = self.current_player_country
+                to_cell.garrison_ready = True
+            else:
+                self.record_aggression(self.current_player_country, to_cell.country)
+                self.log_event(f"Conquête de {COUNTRY_NAMES[to_cell.country]}")
+                to_cell.country = self.current_player_country
 
         if to_cell.army:
             capacity = MAX_UNITS_PER_ARMY - to_cell.army.count
@@ -365,20 +375,9 @@ class Game:
         attacker_type = attacker.unit_type
         defender_type = defender.unit_type
 
-        attacker_advantage = 0
-
-        if attacker_type == UnitType.SWORDSMAN and defender_type == UnitType.CROSSBOWMAN:
-            attacker_advantage = 1
-        elif attacker_type == UnitType.CROSSBOWMAN and defender_type == UnitType.CAVALRY:
-            attacker_advantage = 1
-        elif attacker_type == UnitType.CAVALRY and defender_type == UnitType.SWORDSMAN:
-            attacker_advantage = 1
-        elif defender_type == UnitType.SWORDSMAN and attacker_type == UnitType.CROSSBOWMAN:
-            attacker_advantage = -1
-        elif defender_type == UnitType.CROSSBOWMAN and attacker_type == UnitType.CAVALRY:
-            attacker_advantage = -1
-        elif defender_type == UnitType.CAVALRY and attacker_type == UnitType.SWORDSMAN:
-            attacker_advantage = -1
+        attacker_advantage = self.combat_advantage(attacker_type, defender_type)
+        if attacker_type == UnitType.CATAPULT and (defender_cell.is_city or defender_cell.is_capital):
+            attacker_advantage += 2
 
         attacker_player = self.players.get(attacker.country)
         defender_player = self.players.get(defender.country)
@@ -389,6 +388,10 @@ class Game:
         terrain_bonus = TERRAIN_DEFENSE_BONUS[defender_cell.terrain]
         if defender_cell.terrain == TerrainType.FOREST and defender_player:
             terrain_bonus += defender_player.forest_defense_bonus
+        if defender_cell.is_capital:
+            terrain_bonus += CAPITAL_WALL_BONUS
+        elif defender_cell.is_city:
+            terrain_bonus += CITY_WALL_BONUS
         if defender.is_fortified:
             terrain_bonus += FORTIFY_DEFENSE_BONUS
             defender.is_fortified = False
@@ -406,6 +409,7 @@ class Game:
             attacker.count = max(1, attacker.count - losses)
             self.log_event(f"{COUNTRY_NAMES[attacker.country]} gagne ({losses} pertes)")
             defender_cell.country = attacker.country
+            defender_cell.garrison_ready = True
             defender_cell.army = attacker
             attacker_cell.army = None
             return {"losses": losses, "winner": "attacker"}
@@ -420,6 +424,38 @@ class Game:
         self.log_event("Combat indécis")
         return {"losses": 1, "winner": "draw"}
 
+    def combat_advantage(self, attacker_type, defender_type):
+        beats = {
+            UnitType.SWORDSMAN: (UnitType.CROSSBOWMAN, UnitType.SPEARMAN),
+            UnitType.CROSSBOWMAN: (UnitType.CAVALRY,),
+            UnitType.CAVALRY: (UnitType.SWORDSMAN,),
+            UnitType.SPEARMAN: (UnitType.CAVALRY,),
+        }
+        if defender_type in beats.get(attacker_type, ()):
+            return 1
+        if attacker_type in beats.get(defender_type, ()):
+            return -1
+        return 0
+
+    def is_enemy_urban(self, cell, country):
+        if not cell or not (cell.is_city or cell.is_capital):
+            return False
+        return cell.country not in (country, Country.NONE)
+
+    def ensure_city_garrison(self, cell):
+        if not cell or cell.army:
+            return
+        if not (cell.is_city or cell.is_capital) or cell.country == Country.NONE:
+            return
+        if not getattr(cell, "garrison_ready", True):
+            return
+        count = CAPITAL_GARRISON_COUNT if cell.is_capital else CITY_GARRISON_COUNT
+        cell.army = Army(cell.country, UnitType.SPEARMAN, count)
+        cell.army.movement_left = 0
+        cell.army.has_moved = True
+        cell.garrison_ready = False
+        self.log_event(f"Garnison : {count} lanciers sortent des murs")
+
     def is_passable_terrain(self, cell, moving_army=None):
         if moving_army and moving_army.embarked:
             return cell.terrain in NAVAL_TERRAINS
@@ -429,6 +465,8 @@ class Game:
         if not self.is_passable_terrain(cell, moving_army):
             return False
         if not cell.army:
+            if self.is_enemy_urban(cell, moving_army.country):
+                return is_goal and not moving_army.embarked
             return True
         if cell.army.country != moving_army.country:
             if moving_army.embarked:
@@ -441,17 +479,20 @@ class Game:
     def get_adjacent_enemy_cells(self, from_cell, country):
         targets = set()
         army = from_cell.army
+        embarked = bool(army and army.embarked)
         for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
             nx, ny = from_cell.x + dx, from_cell.y + dy
             if not (0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS):
                 continue
             neighbor = self.grid[nx][ny]
-            if not neighbor.army or neighbor.army.country in (country, Country.NONE):
-                continue
-            if army and army.embarked:
-                if neighbor.army.embarked:
+            if neighbor.army and neighbor.army.country not in (country, Country.NONE):
+                if embarked:
+                    if neighbor.army.embarked:
+                        targets.add((nx, ny))
+                elif not neighbor.army.embarked:
                     targets.add((nx, ny))
-            elif not neighbor.army.embarked:
+                continue
+            if not embarked and self.is_enemy_urban(neighbor, country):
                 targets.add((nx, ny))
         return targets
 
@@ -459,31 +500,36 @@ class Game:
         targets = set()
         if not from_cell or not from_cell.army:
             return targets
-        if from_cell.army.unit_type != UnitType.CROSSBOWMAN:
+        army = from_cell.army
+        if army.unit_type not in UNIT_RANGED_RANGE:
             return targets
-        if from_cell.army.movement_left <= 0:
+        if army.movement_left <= 0:
             return targets
         player = self.players[self.current_player_country]
-        max_range = UNIT_RANGED_RANGE[UnitType.CROSSBOWMAN] + player.ranged_range_bonus
+        max_range = UNIT_RANGED_RANGE[army.unit_type] + player.ranged_range_bonus
         for x in range(GRID_COLS):
             for y in range(GRID_ROWS):
                 if (x, y) not in self.visibility:
                     continue
                 cell = self.grid[x][y]
-                if not cell.army or cell.army.country in (self.current_player_country, Country.NONE):
-                    continue
                 distance = abs(from_cell.x - x) + abs(from_cell.y - y)
-                if 1 <= distance <= max_range:
+                if not (1 <= distance <= max_range):
+                    continue
+                if cell.army and cell.army.country not in (self.current_player_country, Country.NONE):
+                    targets.add((x, y))
+                elif army.unit_type == UnitType.CATAPULT and self.is_enemy_urban(cell, self.current_player_country):
                     targets.add((x, y))
         return targets
 
     def ranged_attack(self, attacker_cell, target_cell):
-        if not attacker_cell.army or attacker_cell.army.unit_type != UnitType.CROSSBOWMAN:
+        if not attacker_cell.army or attacker_cell.army.unit_type not in UNIT_RANGED_RANGE:
             return
         attacker = attacker_cell.army
         if attacker.movement_left <= 0:
-            self.log_event("Arbaletrier sans PM")
+            self.log_event("Plus de mouvement pour tirer")
             return
+        if attacker.unit_type == UnitType.CATAPULT and self.is_enemy_urban(target_cell, attacker.country):
+            self.ensure_city_garrison(target_cell)
         if not target_cell.army or target_cell.army.country == self.current_player_country:
             self.log_event("Cible invalide")
             return
@@ -494,10 +540,14 @@ class Game:
         damage = max(
             1,
             RANGED_BASE_DAMAGE
-            + UNIT_STATS[UnitType.CROSSBOWMAN]["attack"]
+            + UNIT_STATS[attacker.unit_type]["attack"]
             + player.ranged_damage_bonus
             - UNIT_STATS[defender.unit_type]["defense"] // 2
         )
+        if attacker.unit_type == UnitType.CATAPULT:
+            damage += 2
+            if target_cell.is_city or target_cell.is_capital:
+                damage += 2
         if defender.is_fortified:
             damage = max(1, damage - 1)
             defender.is_fortified = False
@@ -656,7 +706,7 @@ class Game:
         self.move_targets, self.attack_targets = self.get_reachable_cells(cell)
         self.disembark_targets = self.get_disembark_targets(cell)
         self.embark_targets = self.get_embark_targets(cell)
-        if cell.army and cell.army.unit_type == UnitType.CROSSBOWMAN:
+        if cell.army and cell.army.unit_type in UNIT_RANGED_RANGE:
             self.ranged_targets = self.get_ranged_targets(cell)
         else:
             self.ranged_targets.clear()
@@ -773,9 +823,11 @@ class Game:
         return [self.grid[x][y] for x, y in path_coords]
 
     def conquer_path(self, path_cells):
-        """Conquiert les cases traversées (hors eau) pendant un déplacement."""
+        """Conquiert les cases traversées (hors eau et hors villes)."""
         for cell in path_cells:
             if cell.terrain in (TerrainType.WATER,):
+                continue
+            if cell.is_city or cell.is_capital:
                 continue
             if cell.country != self.current_player_country:
                 cell.country = self.current_player_country
@@ -874,7 +926,9 @@ class Game:
                 if not path_cells:
                     continue
                 costs[(x, y)] = self.path_move_cost(path_cells, from_cell.army)
-                if target.army and target.army.country != self.current_player_country:
+                if (target.army and target.army.country != self.current_player_country) or self.is_enemy_urban(
+                    target, self.current_player_country
+                ):
                     attack_targets.add((x, y))
                 else:
                     move_targets.add((x, y))
@@ -1631,20 +1685,22 @@ class Game:
                         )
                         self.screen.blit(glow, cell_screen_pos(x, y))
 
-            def blit_highlight(cells, color):
+            def blit_highlight(cells, fill, rim=None):
                 for hx, hy in cells:
                     if (hx, hy) not in self.visibility:
                         continue
                     highlight = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                    highlight.fill(color)
+                    highlight.fill(fill)
+                    if rim:
+                        pygame.draw.rect(highlight, rim, highlight.get_rect().inflate(-2, -2), 2)
                     self.screen.blit(highlight, cell_screen_pos(hx, hy))
 
-            blit_highlight(self.move_targets, (36, 92, 48, 55))
-            blit_highlight(self.attack_targets, (160, 40, 32, 90))
-            blit_highlight(self.bridge_targets, (180, 140, 60, 110))
-            blit_highlight(self.ranged_targets, (120, 60, 150, 110))
-            blit_highlight(self.embark_targets, (36, 90, 140, 110))
-            blit_highlight(self.disembark_targets, (40, 120, 70, 110))
+            blit_highlight(self.move_targets, (48, 160, 62, 120), (230, 255, 210, 230))
+            blit_highlight(self.attack_targets, (180, 36, 28, 130), (255, 190, 170, 240))
+            blit_highlight(self.bridge_targets, (180, 140, 60, 110), (255, 220, 140, 220))
+            blit_highlight(self.ranged_targets, (120, 60, 150, 120), (230, 190, 255, 230))
+            blit_highlight(self.embark_targets, (36, 90, 140, 120), (170, 210, 255, 230))
+            blit_highlight(self.disembark_targets, (40, 120, 70, 120), (190, 255, 190, 230))
             self.draw_movement_preview()
 
             for x in range(GRID_COLS):
@@ -1720,8 +1776,10 @@ class Game:
         ]
         if cell.is_capital:
             lines.append("Capitale")
+            lines.append(f"Murs +{CAPITAL_WALL_BONUS}. Garnison {CAPITAL_GARRISON_COUNT} lanciers")
         elif cell.is_city:
             lines.append("Ville")
+            lines.append(f"Murs +{CITY_WALL_BONUS}. Garnison {CITY_GARRISON_COUNT} lanciers")
         move_cost = TERRAIN_MOVE_COST.get(cell.terrain, 1)
         if cell.terrain != TerrainType.WATER:
             lines.append(f"Coût de déplacement : {move_cost} PM")
