@@ -87,21 +87,7 @@ class TileRenderTests(unittest.TestCase):
         self.assertEqual(out.get_at((16, 16))[:3], (83, 83, 83))
         self.assertEqual(out.get_at((16, 16))[3], 255)
 
-    def test_trim_crops_empty_frame(self):
-        from asset_loader import AssetLoader
-
-        pygame.display.set_mode((1, 1))
-        loader = AssetLoader("assets")
-        surf = pygame.Surface((128, 128), pygame.SRCALPHA)
-        surf.fill((0, 0, 0, 0))
-        for x in range(50, 70):
-            for y in range(40, 90):
-                surf.set_at((x, y), (83, 83, 83, 255))
-        trimmed = loader._trim_transparent(surf)
-        self.assertLessEqual(trimmed.get_width(), 26)
-        self.assertLessEqual(trimmed.get_height(), 56)
-
-    def test_cavalry_png_keeps_gray_and_fills_the_tile(self):
+    def test_cavalry_png_keeps_gray_without_stretching(self):
         from asset_loader import AssetLoader
 
         pygame.display.set_mode((1, 1))
@@ -109,17 +95,20 @@ class TileRenderTests(unittest.TestCase):
         cavalry = loader.units[UnitType.CAVALRY]
         self.assertIsNotNone(cavalry)
         width, height = cavalry.get_size()
-        opaque = 0
         gray = 0
+        min_x, min_y, max_x, max_y = width, height, -1, -1
         for y in range(height):
             for x in range(width):
                 color = cavalry.get_at((x, y))
                 if color[3] > 80:
-                    opaque += 1
+                    min_x = min(min_x, x)
+                    min_y = min(min_y, y)
+                    max_x = max(max_x, x)
+                    max_y = max(max_y, y)
                     if 50 <= color[0] <= 120 and abs(color[0] - color[1]) < 20:
                         gray += 1
-        self.assertGreater(opaque, 150)
-        self.assertGreater(gray, 80)
+        self.assertGreater(gray, 20)
+        self.assertGreater(max_y - min_y, (max_x - min_x) * 1.4)
 
     def test_same_country_tiles_share_one_outer_border(self):
         grid = [[Cell(x, y) for y in range(GRID_ROWS)] for x in range(GRID_COLS)]

@@ -36,7 +36,6 @@ class AssetLoader:
             image = image.convert()
         if fit:
             image = self._knockout_black_background(image)
-            image = self._trim_transparent(image)
         return pygame.transform.smoothscale(image, size)
 
     def _knockout_black_background(self, surf, limit=18):
@@ -80,27 +79,6 @@ class AssetLoader:
                 work.set_at((x, y), (0, 0, 0, 0))
             queue.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
         return work
-
-    def _trim_transparent(self, surf, pad=2, alpha_min=32):
-        """Crop to the drawing so a small figure in a 128px frame fills the tile."""
-        if surf is None:
-            return None
-        width, height = surf.get_size()
-        min_x, min_y, max_x, max_y = width, height, -1, -1
-        for y in range(height):
-            for x in range(width):
-                if surf.get_at((x, y))[3] > alpha_min:
-                    min_x = min(min_x, x)
-                    min_y = min(min_y, y)
-                    max_x = max(max_x, x)
-                    max_y = max(max_y, y)
-        if max_x < 0:
-            return surf
-        min_x = max(0, min_x - pad)
-        min_y = max(0, min_y - pad)
-        max_x = min(width - 1, max_x + pad)
-        max_y = min(height - 1, max_y + pad)
-        return surf.subsurface(pygame.Rect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)).copy()
 
     def _load_named(self, filenames, size, fit=False):
         for name in filenames:
