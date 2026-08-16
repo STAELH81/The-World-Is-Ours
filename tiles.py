@@ -180,9 +180,12 @@ def draw_army_badge(surface, screen_x, screen_y, army, assets=None):
     color = COUNTRY_COLORS[army.country]
     _draw_unit_base(surface, screen_x, screen_y, color)
     sprite = assets.units.get(army.unit_type) if assets else None
+    ship = getattr(assets, "ship", None) if assets else None
     cx = screen_x + CELL_SIZE // 2
     cy = screen_y + CELL_SIZE // 2 - 1
-    if sprite and not army.embarked:
+    if army.embarked and ship:
+        surface.blit(ship, ship.get_rect(center=(cx, cy)))
+    elif sprite and not army.embarked:
         surface.blit(sprite, sprite.get_rect(center=(cx, cy)))
     else:
         surface.blit(unit_surface(army), (screen_x, screen_y))

@@ -18,6 +18,7 @@ assets/
   units/unit_cavalry.png
   units/unit_spearman.png
   units/unit_catapult.png
+  units/unit_ship.png
   buildings/capital.png
   buildings/city.png
 ```

@@ -12,6 +12,7 @@ class AssetLoader:
         self.overlays = {}
         self.units = {}
         self.buildings = {}
+        self.ship = None
         self._index = {}
         self._index_files()
         self._load_all()
@@ -140,3 +141,8 @@ class AssetLoader:
                 (max(18, CELL_SIZE - 12), max(18, CELL_SIZE - 12)),
             ),
         }
+        self.ship = self._pick(
+            ["units/unit_ship.png", "units/ship.png", "ship.png", "units/bateau.png", "bateau.png"],
+            ("ship", "bateau", "navire", "boat", "galere"),
+            unit,
+        )

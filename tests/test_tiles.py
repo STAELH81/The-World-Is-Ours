@@ -41,6 +41,20 @@ class TileRenderTests(unittest.TestCase):
         px, py = cell_screen_pos(1, 0)
         self.assertNotEqual(surf.get_at((px + 4, py + 4))[:3], (0, 0, 0))
 
+    def test_embarked_army_can_use_a_ship_sprite(self):
+        from tiles import draw_army_badge
+
+        class Assets:
+            units = {}
+            ship = pygame.Surface((18, 18), pygame.SRCALPHA)
+            ship.fill((255, 0, 180, 255))
+
+        army = Army(Country.BLUE, UnitType.SWORDSMAN, 2)
+        army.embarked = True
+        surf = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+        draw_army_badge(surf, 0, 0, army, assets=Assets())
+        self.assertEqual(surf.get_at((CELL_SIZE // 2, CELL_SIZE // 2 - 1))[:3], (255, 0, 180))
+
     def test_same_country_tiles_share_one_outer_border(self):
         grid = [[Cell(x, y) for y in range(GRID_ROWS)] for x in range(GRID_COLS)]
         for x in range(2, 5):

@@ -94,7 +94,7 @@ La partie est enregistrée automatiquement à chaque fin de tour dans `saves/lat
 Place tes PNG dans `assets/` : le jeu les charge tout seul (plusieurs noms de fichiers marchent, ex. `city.png`, `ville.png`, `capital.png`).
 
 - `assets/terrain/` — plaine, forêt, montagne, eau, plage, pont
-- `assets/units/` — spadassin, arbalétrier, cavalerie, lancier, catapulte
+- `assets/units/` — spadassin, arbalétrier, cavalerie, lancier, catapulte, **bateau**
 - `assets/buildings/` — **capitale**, **ville**
 
 Sans fichier, le jeu dessine le terrain à la main.
