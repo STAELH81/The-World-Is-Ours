@@ -60,10 +60,18 @@ class SaveGameTests(unittest.TestCase):
         game.players = {
             Country.RED: Player(Country.RED),
             Country.GREEN: Player(Country.GREEN),
+            Country.BLUE: Player(Country.BLUE),
+            Country.YELLOW: Player(Country.YELLOW),
+            Country.ORANGE: Player(Country.ORANGE),
         }
         game.players[Country.RED].gold = 500
         game.players[Country.GREEN].gold = 300
         game.players[Country.GREEN].is_ai = True
+        game.players[Country.BLUE].is_ai = True
+        game.players[Country.YELLOW].is_ai = True
+        game.players[Country.ORANGE].is_ai = True
+        game.gold_looted = {Country.RED: 18}
+        game.grid[0][0].army.embarked = True
         return game
 
     def test_save_and_load_roundtrip(self):
@@ -79,12 +87,40 @@ class SaveGameTests(unittest.TestCase):
         self.assertEqual(loaded.turn_number, 2)
         self.assertEqual(loaded.current_player_country, Country.RED)
         self.assertEqual(loaded.grid[0][0].army.count, 2)
+        self.assertTrue(loaded.grid[0][0].army.embarked)
         self.assertTrue(loaded.grid[3][3].is_capital)
         self.assertEqual(loaded.settings["difficulty"], "easy")
+        self.assertEqual(loaded.gold_looted[Country.RED], 18)
+        self.assertEqual(loaded.players[Country.RED].swordsman_cost_reduction, 10)
+        self.assertEqual(len(loaded.players), 5)
 
     def test_invalid_version_rejected(self):
         with open(self.save_path, "w", encoding="utf-8") as f:
             json.dump({"version": 999}, f)
+        loaded = MagicMock()
+        loaded.screen = MagicMock()
+        loaded.audio = MagicMock()
+        self.assertFalse(save_game.load_game(loaded))
+
+    def test_legacy_v2_save_rejected(self):
+        with open(self.save_path, "w", encoding="utf-8") as f:
+            json.dump({"version": 2, "grid": []}, f)
+        loaded = MagicMock()
+        loaded.screen = MagicMock()
+        loaded.audio = MagicMock()
+        self.assertFalse(save_game.load_game(loaded))
+
+    def test_legacy_v1_save_rejected(self):
+        with open(self.save_path, "w", encoding="utf-8") as f:
+            json.dump({"version": 1, "grid": []}, f)
+        loaded = MagicMock()
+        loaded.screen = MagicMock()
+        loaded.audio = MagicMock()
+        self.assertFalse(save_game.load_game(loaded))
+
+    def test_corrupt_json_rejected(self):
+        with open(self.save_path, "w", encoding="utf-8") as f:
+            f.write("{not-json")
         loaded = MagicMock()
         loaded.screen = MagicMock()
         loaded.audio = MagicMock()

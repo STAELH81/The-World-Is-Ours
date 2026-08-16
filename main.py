@@ -1,8 +1,9 @@
+import math
+import heapq
 import pygame
 import sys
-from collections import deque
 from constants import *
-from cell import Cell
+from cell import Cell, draw_army_at
 from ui import UI
 from menu import Menu
 from army import Army
@@ -15,6 +16,7 @@ from audio import AudioManager
 from tutorial import Tutorial
 from pause_menu import PauseMenu
 from settings import load_settings, AI_SPEED_DELAYS_MS, DIFFICULTY_CONFIG
+from fx import Effects, draw_end_recap
 
 DEFEAT_LOOT_RATIO = 0.25
 SOLO_HUMAN_COUNTRY = Country.RED
@@ -29,9 +31,11 @@ class Game:
         self.running = True
         self.settings = load_settings()
         self.assets = AssetLoader("assets")
+        self.assets.summarize()
         self.audio = AudioManager(volume=self.settings["volume"])
         self.tutorial = Tutorial()
         self.pause_menu = PauseMenu(self.screen)
+        self.fx = Effects()
         self.map_seed = None
         self.last_aggressor = {}
         
@@ -71,10 +75,14 @@ class Game:
         self.game_over_message = ""
         self.player_defeated = False
         self.preview_path_cells = []
+        self.move_costs = {}
         self.occupation_tracker = {}
         self.ai_turn_pending = False
         self.ai_turn_resume_at = 0
-        self.last_aggressor = {}
+        self.disembark_targets = set()
+        self.embark_targets = set()
+        self.gold_looted = {}
+        self.audio.play_music("menu")
 
     def start_game(self, mode):
         """Démarre une nouvelle partie"""
@@ -105,18 +113,26 @@ class Game:
         self.game_over_message = ""
         self.player_defeated = False
         self.preview_path_cells = []
+        self.move_costs = {}
         self.occupation_tracker = {}
         self.ai_turn_pending = False
         self.ai_turn_resume_at = 0
         self.last_aggressor = {}
+        self.disembark_targets = set()
+        self.embark_targets = set()
+        self.gold_looted = {}
+        self.fx.clear()
         self.ui = UI(self.screen)
 
         self.ai = AI(self)
         MapGenerator().generate(self)
-        self.place_starting_armies()
         self.init_players()
+        self.place_starting_armies()
         self.tutorial.start()
-        self.log_event("Nouvelle carte generee")
+        self.audio.play_music("game")
+        self.fx.show_banner(f"Tour de {COUNTRY_NAMES[self.current_player_country]}")
+        self.log_event("Nouvelle carte générée")
+        self.select_next_idle_army()
     
     def recruit_unit(self, unit_type):
         """Recrute une unité sur la case sélectionnée"""
@@ -143,7 +159,7 @@ class Game:
             print("Cette ville a deja recrute ce tour")
             return
 
-        cost = UNIT_COSTS[unit_type]
+        cost = player.unit_cost(unit_type)
         if not player.can_afford(unit_type):
             print(f"Pas assez d'or ! ({player.gold}/{cost})")
             return
@@ -163,9 +179,10 @@ class Game:
             cell.army.count += 1
         else:
             cell.army = Army(self.current_player_country, unit_type, 1)
+            cell.army.refresh_movement(player)
         cell.last_recruit_turn = self.turn_number
 
-        self.log_event(f"[OK] {UNIT_NAMES[unit_type]} recrute. Or: {player.gold}")
+        self.log_event(f"{UNIT_NAMES[unit_type]} recruté. Or: {player.gold}")
     
     def build_city(self):
         """Construit une ville sur la case sélectionnée"""
@@ -212,7 +229,7 @@ class Game:
         cell.is_city = True
         cell.city_owner = self.current_player_country
         self.audio.play("build")
-        self.log_event(f"[OK] Ville construite. Or: {player.gold}")
+        self.log_event(f"Ville construite. Or: {player.gold}")
 
     def move_army(self, from_cell, to_cell):
         """Déplace une armée d'une case à une autre"""
@@ -228,14 +245,18 @@ class Game:
             print("Ce n'est pas votre armée")
             return
         if army.has_moved:
-            self.log_event("Cette armee a deja bouge ce tour")
+            self.log_event("Cette armée a déjà bougé ce tour")
             return
         if army.movement_left <= 0:
-            self.log_event("Cette armee n'a plus de mouvement")
+            self.log_event("Cette armée n'a plus de mouvement")
             return
 
-        if to_cell.terrain == TerrainType.WATER:
-            self.log_event("Impossible de se deplacer sur l'eau")
+        if army.embarked:
+            if to_cell.terrain not in NAVAL_TERRAINS:
+                self.log_event("Un navire doit débarquer pour aller à terre")
+                return
+        elif to_cell.terrain == TerrainType.WATER:
+            self.log_event("Impossible de se déplacer sur l'eau")
             return
         if from_cell == to_cell:
             return
@@ -257,27 +278,31 @@ class Game:
         if not path_cells:
             self.log_event("Aucun chemin valide vers cette case")
             return
-        move_cost = len(path_cells)
+        move_cost = self.path_move_cost(path_cells, army)
+
+        if self.is_enemy_urban(to_cell, army.country) and not army.embarked:
+            self.ensure_city_garrison(to_cell)
 
         # Si case ennemie avec armée → COMBAT
         if to_cell.army and to_cell.army.country != self.current_player_country:
-            self.battle(from_cell, to_cell)
+            if army.embarked and not to_cell.army.embarked:
+                self.log_event("Débarque d'abord pour attaquer à terre")
+                return
+            if not army.embarked and to_cell.army.embarked:
+                self.log_event("Impossible d'aborder un navire à pied")
+                return
+            result = self.battle(from_cell, to_cell)
             self.audio.play("battle")
+            if result:
+                self.fx.float_text(to_cell.x, to_cell.y, f"-{result['losses']}", (231, 76, 60))
+                self.add_animation([(to_cell.x, to_cell.y)], (231, 76, 60), 16)
             if to_cell.army and to_cell.army.country == self.current_player_country:
                 to_cell.army.movement_left = max(0, to_cell.army.movement_left - move_cost)
                 to_cell.army.has_moved = to_cell.army.movement_left <= 0
-                self.add_animation([(to_cell.x, to_cell.y)], (231, 76, 60), 16)
                 self.apply_bridge_wear(path_cells)
-            self.evaluate_occupation_pressure()
-            self.check_victory()
-            return
-
-        # Entering an already occupied urban tile destroys the incoming army.
-        if (to_cell.is_city or to_cell.is_capital) and to_cell.army:
-            from_cell.army = None
-            self.log_event("[URBAN] Entree en ville occupee: armee detruite")
-            self.add_animation([(to_cell.x, to_cell.y)], (200, 60, 60), 18)
-            self.update_defeat_states()
+            elif from_cell.army and from_cell.army.country == self.current_player_country:
+                from_cell.army.movement_left = 0
+                from_cell.army.has_moved = True
             self.evaluate_occupation_pressure()
             self.check_victory()
             return
@@ -290,12 +315,24 @@ class Game:
                 self.log_event(f"Case pleine (max {MAX_UNITS_PER_ARMY})")
                 return
 
-        self.conquer_path(path_cells)
+        if not army.embarked:
+            self.conquer_path(path_cells)
 
-        if to_cell.country != Country.NONE and to_cell.country != self.current_player_country:
-            self.record_aggression(self.current_player_country, to_cell.country)
-            self.log_event(f"[COMBAT] Conquete de {COUNTRY_NAMES[to_cell.country]}")
-            to_cell.country = self.current_player_country
+        if (
+            not army.embarked
+            and to_cell.country != Country.NONE
+            and to_cell.country != self.current_player_country
+        ):
+            if to_cell.is_city or to_cell.is_capital:
+                self.record_aggression(self.current_player_country, to_cell.country)
+                kind = "Capitale" if to_cell.is_capital else "Ville"
+                self.log_event(f"{kind} prise")
+                to_cell.country = self.current_player_country
+                to_cell.garrison_ready = True
+            else:
+                self.record_aggression(self.current_player_country, to_cell.country)
+                self.log_event(f"Conquête de {COUNTRY_NAMES[to_cell.country]}")
+                to_cell.country = self.current_player_country
 
         if to_cell.army:
             capacity = MAX_UNITS_PER_ARMY - to_cell.army.count
@@ -306,18 +343,18 @@ class Game:
             to_cell.army.has_moved = to_cell.army.movement_left <= 0
             if army.count <= 0:
                 from_cell.army = None
-                self.log_event(f"[OK] Armees fusionnees ({to_cell.army.count})")
+                self.log_event(f"Armées fusionnées ({to_cell.army.count})")
             else:
                 army.has_moved = True
                 army.movement_left = 0
-                self.log_event(f"[OK] Fusion partielle ({to_cell.army.count}/{MAX_UNITS_PER_ARMY})")
+                self.log_event(f"Fusion partielle ({to_cell.army.count}/{MAX_UNITS_PER_ARMY})")
         else:
             # Déplacement simple
             to_cell.army = army
             to_cell.army.movement_left = max(0, to_cell.army.movement_left - move_cost)
             to_cell.army.has_moved = to_cell.army.movement_left <= 0
             from_cell.army = None
-            self.log_event("[OK] Deplacement effectue")
+            self.log_event("Déplacement effectué")
         self.audio.play("move")
         self.add_animation([(from_cell.x, from_cell.y), (to_cell.x, to_cell.y)], (52, 152, 219), 14)
         self.apply_bridge_wear(path_cells)
@@ -332,95 +369,131 @@ class Game:
         defender = defender_cell.army
         self.record_aggression(attacker.country, defender.country)
 
-        self.log_event(f"[COMBAT] {COUNTRY_NAMES[attacker.country]} vs {COUNTRY_NAMES[defender.country]}")
+        self.log_event(f"{COUNTRY_NAMES[attacker.country]} attaque {COUNTRY_NAMES[defender.country]}")
 
         # Système RPS (Pierre-Papier-Ciseaux)
         # Spadassin > Arbalétrier > Cavalerie > Spadassin
         attacker_type = attacker.unit_type
         defender_type = defender.unit_type
 
-        attacker_advantage = 0
+        attacker_advantage = self.combat_advantage(attacker_type, defender_type)
+        if attacker_type == UnitType.CATAPULT and (defender_cell.is_city or defender_cell.is_capital):
+            attacker_advantage += 2
 
-        if attacker_type == UnitType.SWORDSMAN and defender_type == UnitType.CROSSBOWMAN:
-            attacker_advantage = 1
-        elif attacker_type == UnitType.CROSSBOWMAN and defender_type == UnitType.CAVALRY:
-            attacker_advantage = 1
-        elif attacker_type == UnitType.CAVALRY and defender_type == UnitType.SWORDSMAN:
-            attacker_advantage = 1
-        elif defender_type == UnitType.SWORDSMAN and attacker_type == UnitType.CROSSBOWMAN:
-            attacker_advantage = -1
-        elif defender_type == UnitType.CROSSBOWMAN and attacker_type == UnitType.CAVALRY:
-            attacker_advantage = -1
-        elif defender_type == UnitType.CAVALRY and attacker_type == UnitType.SWORDSMAN:
-            attacker_advantage = -1
+        attacker_player = self.players.get(attacker.country)
+        defender_player = self.players.get(defender.country)
+        attack_bonus = 0
+        if attacker_player and attacker_type == UnitType.SWORDSMAN:
+            attack_bonus += attacker_player.swordsman_attack_bonus
 
-        # Bonus de terrain pour le défenseur
         terrain_bonus = TERRAIN_DEFENSE_BONUS[defender_cell.terrain]
+        if defender_cell.terrain == TerrainType.FOREST and defender_player:
+            terrain_bonus += defender_player.forest_defense_bonus
+        if defender_cell.is_capital:
+            terrain_bonus += CAPITAL_WALL_BONUS
+        elif defender_cell.is_city:
+            terrain_bonus += CITY_WALL_BONUS
         if defender.is_fortified:
             terrain_bonus += FORTIFY_DEFENSE_BONUS
             defender.is_fortified = False
 
-        # Calcul des forces
-        attacker_power = attacker.count * (UNIT_STATS[attacker_type]["attack"] + attacker_advantage)
+        attacker_power = attacker.count * (
+            UNIT_STATS[attacker_type]["attack"] + attacker_advantage + attack_bonus
+        )
         defender_power = defender.count * (UNIT_STATS[defender_type]["defense"] + terrain_bonus)
 
         print(f"  Force attaquant: {attacker_power} (avantage RPS: {attacker_advantage:+d})")
         print(f"  Force défenseur: {defender_power} (bonus terrain: +{terrain_bonus})")
 
-        # Résolution
         if attacker_power > defender_power:
-            # Victoire attaquant
-            losses = max(1, defender.count // 2)  # L'attaquant perd 50% du défenseur
+            losses = max(1, defender.count // 2)
             attacker.count = max(1, attacker.count - losses)
-
-            self.log_event(f"[OK] {COUNTRY_NAMES[attacker.country]} gagne ({losses} pertes)")
-
-            # Conquête
+            self.log_event(f"{COUNTRY_NAMES[attacker.country]} gagne ({losses} pertes)")
             defender_cell.country = attacker.country
+            defender_cell.garrison_ready = True
             defender_cell.army = attacker
             attacker_cell.army = None
-
-        elif defender_power > attacker_power:
-            # Victoire défenseur
+            return {"losses": losses, "winner": "attacker"}
+        if defender_power > attacker_power:
             losses = max(1, attacker.count // 2)
             defender.count = max(1, defender.count - losses)
-
-            self.log_event(f"[OK] {COUNTRY_NAMES[defender.country]} defend ({losses} pertes)")
-
-            # Attaquant détruit
+            self.log_event(f"{COUNTRY_NAMES[defender.country]} défend ({losses} pertes)")
             attacker_cell.army = None
+            return {"losses": losses, "winner": "defender"}
+        attacker.count = max(1, attacker.count - 1)
+        defender.count = max(1, defender.count - 1)
+        self.log_event("Combat indécis")
+        return {"losses": 1, "winner": "draw"}
 
-        else:
-            # Égalité - les deux perdent des unités
-            attacker.count = max(1, attacker.count - 1)
-            defender.count = max(1, defender.count - 1)
+    def combat_advantage(self, attacker_type, defender_type):
+        beats = {
+            UnitType.SWORDSMAN: (UnitType.CROSSBOWMAN, UnitType.SPEARMAN),
+            UnitType.CROSSBOWMAN: (UnitType.CAVALRY,),
+            UnitType.CAVALRY: (UnitType.SWORDSMAN,),
+            UnitType.SPEARMAN: (UnitType.CAVALRY,),
+        }
+        if defender_type in beats.get(attacker_type, ()):
+            return 1
+        if attacker_type in beats.get(defender_type, ()):
+            return -1
+        return 0
 
-            self.log_event("[COMBAT] Combat indecis")
+    def is_enemy_urban(self, cell, country):
+        if not cell or not (cell.is_city or cell.is_capital):
+            return False
+        return cell.country not in (country, Country.NONE)
 
-            # Attaquant ne bouge pas
+    def ensure_city_garrison(self, cell):
+        if not cell or cell.army:
+            return
+        if not (cell.is_city or cell.is_capital) or cell.country == Country.NONE:
+            return
+        if not getattr(cell, "garrison_ready", True):
+            return
+        count = CAPITAL_GARRISON_COUNT if cell.is_capital else CITY_GARRISON_COUNT
+        cell.army = Army(cell.country, UnitType.SPEARMAN, count)
+        cell.army.movement_left = 0
+        cell.army.has_moved = True
+        cell.garrison_ready = False
+        self.log_event(f"Garnison : {count} lanciers sortent des murs")
 
-    def is_passable_terrain(self, cell):
+    def is_passable_terrain(self, cell, moving_army=None):
+        if moving_army and moving_army.embarked:
+            return cell.terrain in NAVAL_TERRAINS
         return cell.terrain != TerrainType.WATER
 
     def can_step_through(self, cell, moving_army, is_goal=False):
-        if not self.is_passable_terrain(cell):
+        if not self.is_passable_terrain(cell, moving_army):
             return False
         if not cell.army:
+            if self.is_enemy_urban(cell, moving_army.country):
+                return is_goal and not moving_army.embarked
             return True
         if cell.army.country != moving_army.country:
-            return is_goal
+            if moving_army.embarked:
+                return is_goal and cell.army.embarked
+            return is_goal and not cell.army.embarked
         if is_goal:
-            return cell.army.unit_type == moving_army.unit_type
+            return cell.army.unit_type == moving_army.unit_type and cell.army.embarked == moving_army.embarked
         return False
 
     def get_adjacent_enemy_cells(self, from_cell, country):
         targets = set()
+        army = from_cell.army
+        embarked = bool(army and army.embarked)
         for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
             nx, ny = from_cell.x + dx, from_cell.y + dy
             if not (0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS):
                 continue
             neighbor = self.grid[nx][ny]
             if neighbor.army and neighbor.army.country not in (country, Country.NONE):
+                if embarked:
+                    if neighbor.army.embarked:
+                        targets.add((nx, ny))
+                elif not neighbor.army.embarked:
+                    targets.add((nx, ny))
+                continue
+            if not embarked and self.is_enemy_urban(neighbor, country):
                 targets.add((nx, ny))
         return targets
 
@@ -428,31 +501,36 @@ class Game:
         targets = set()
         if not from_cell or not from_cell.army:
             return targets
-        if from_cell.army.unit_type != UnitType.CROSSBOWMAN:
+        army = from_cell.army
+        if army.unit_type not in UNIT_RANGED_RANGE:
             return targets
-        if from_cell.army.movement_left <= 0:
+        if army.movement_left <= 0:
             return targets
         player = self.players[self.current_player_country]
-        max_range = UNIT_RANGED_RANGE[UnitType.CROSSBOWMAN] + player.ranged_range_bonus
+        max_range = UNIT_RANGED_RANGE[army.unit_type] + player.ranged_range_bonus
         for x in range(GRID_COLS):
             for y in range(GRID_ROWS):
                 if (x, y) not in self.visibility:
                     continue
                 cell = self.grid[x][y]
-                if not cell.army or cell.army.country in (self.current_player_country, Country.NONE):
-                    continue
                 distance = abs(from_cell.x - x) + abs(from_cell.y - y)
-                if 1 <= distance <= max_range:
+                if not (1 <= distance <= max_range):
+                    continue
+                if cell.army and cell.army.country not in (self.current_player_country, Country.NONE):
+                    targets.add((x, y))
+                elif army.unit_type == UnitType.CATAPULT and self.is_enemy_urban(cell, self.current_player_country):
                     targets.add((x, y))
         return targets
 
     def ranged_attack(self, attacker_cell, target_cell):
-        if not attacker_cell.army or attacker_cell.army.unit_type != UnitType.CROSSBOWMAN:
+        if not attacker_cell.army or attacker_cell.army.unit_type not in UNIT_RANGED_RANGE:
             return
         attacker = attacker_cell.army
         if attacker.movement_left <= 0:
-            self.log_event("Arbaletrier sans PM")
+            self.log_event("Plus de mouvement pour tirer")
             return
+        if attacker.unit_type == UnitType.CATAPULT and self.is_enemy_urban(target_cell, attacker.country):
+            self.ensure_city_garrison(target_cell)
         if not target_cell.army or target_cell.army.country == self.current_player_country:
             self.log_event("Cible invalide")
             return
@@ -463,10 +541,14 @@ class Game:
         damage = max(
             1,
             RANGED_BASE_DAMAGE
-            + UNIT_STATS[UnitType.CROSSBOWMAN]["attack"]
+            + UNIT_STATS[attacker.unit_type]["attack"]
             + player.ranged_damage_bonus
             - UNIT_STATS[defender.unit_type]["defense"] // 2
         )
+        if attacker.unit_type == UnitType.CATAPULT:
+            damage += 2
+            if target_cell.is_city or target_cell.is_capital:
+                damage += 2
         if defender.is_fortified:
             damage = max(1, damage - 1)
             defender.is_fortified = False
@@ -475,13 +557,13 @@ class Game:
         attacker.movement_left = 0
         attacker.has_moved = True
         attacker.is_fortified = False
-        self.log_event(f"[RANGE] Tir inflige {damage} degats")
+        self.log_event(f"Tir : {damage} dégâts")
         self.audio.play("ranged")
         self.add_animation([(target_cell.x, target_cell.y)], (170, 110, 220), 18)
 
         if defender.count <= 0:
             target_cell.army = None
-            self.log_event("[RANGE] Armee ennemie detruite")
+            self.log_event("Armée ennemie détruite")
         self.update_defeat_states()
         self.evaluate_occupation_pressure()
         self.check_victory()
@@ -500,8 +582,168 @@ class Game:
         army.is_fortified = True
         army.movement_left = 0
         army.has_moved = True
-        self.log_event("[OK] Armee fortifiee")
+        self.log_event("Armée fortifiée")
         self.add_animation([(self.selected_cell.x, self.selected_cell.y)], (120, 170, 120), 16)
+
+    def _neighbors(self, cell):
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = cell.x + dx, cell.y + dy
+            if 0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS:
+                yield self.grid[nx][ny]
+
+    def can_embark_from(self, cell):
+        if not cell.army or cell.army.embarked or cell.army.movement_left <= 0:
+            return False
+        if self.get_adjacent_enemy_cells(cell, cell.army.country):
+            return False
+        return any(
+            neighbor.terrain == TerrainType.WATER and not neighbor.army
+            for neighbor in self._neighbors(cell)
+        )
+
+    def get_embark_targets(self, from_cell):
+        targets = set()
+        if not self.can_embark_from(from_cell):
+            return targets
+        for neighbor in self._neighbors(from_cell):
+            if neighbor.terrain != TerrainType.WATER or neighbor.army:
+                continue
+            targets.add((neighbor.x, neighbor.y))
+        return targets
+
+    def embark_army(self, from_cell, to_cell):
+        if not from_cell.army or from_cell.army.embarked:
+            return False
+        player = self.players[self.current_player_country]
+        cost = player.embark_cost()
+        if player.gold < cost:
+            self.log_event(f"Pas assez d'or pour embarquer ({player.gold}/{cost})")
+            return False
+        if (to_cell.x, to_cell.y) not in self.get_embark_targets(from_cell):
+            self.log_event("Embarquement impossible ici")
+            return False
+        if not player.spend_gold(cost):
+            return False
+        army = from_cell.army
+        army.embarked = True
+        army.is_fortified = False
+        army.movement_left = 0
+        army.has_moved = True
+        if from_cell is not to_cell:
+            to_cell.army = army
+            from_cell.army = None
+        self.audio.play("embark")
+        self.log_event(f"Embarquement. Or: {player.gold}")
+        self.add_animation([(to_cell.x, to_cell.y)], (80, 140, 200), 16)
+        return True
+
+    def get_disembark_targets(self, from_cell):
+        targets = set()
+        if not from_cell.army or not from_cell.army.embarked or from_cell.army.movement_left <= 0:
+            return targets
+        army = from_cell.army
+        if from_cell.terrain == TerrainType.BEACH:
+            targets.add((from_cell.x, from_cell.y))
+        for neighbor in self._neighbors(from_cell):
+            if neighbor.terrain not in DISEMBARK_TERRAINS:
+                continue
+            if neighbor.army:
+                if neighbor.army.country != army.country:
+                    if not neighbor.army.embarked:
+                        targets.add((neighbor.x, neighbor.y))
+                elif (
+                    neighbor.army.unit_type == army.unit_type
+                    and not neighbor.army.embarked
+                    and neighbor.army.count < MAX_UNITS_PER_ARMY
+                ):
+                    targets.add((neighbor.x, neighbor.y))
+            else:
+                targets.add((neighbor.x, neighbor.y))
+        return targets
+
+    def disembark_army(self, from_cell, to_cell):
+        if not from_cell.army or not from_cell.army.embarked:
+            return False
+        if (to_cell.x, to_cell.y) not in self.get_disembark_targets(from_cell):
+            self.log_event("Débarquement impossible ici")
+            return False
+        army = from_cell.army
+        if from_cell is to_cell:
+            army.embarked = False
+            army.movement_left = 0
+            army.has_moved = True
+            self.log_event("Débarquement sur la plage")
+            self.add_animation([(to_cell.x, to_cell.y)], (80, 160, 90), 16)
+            return True
+        army.embarked = False
+        self.move_army(from_cell, to_cell)
+        landed = to_cell.army if to_cell.army and to_cell.army.country == self.current_player_country else None
+        if landed:
+            landed.embarked = False
+            landed.movement_left = 0
+            landed.has_moved = True
+        self.log_event("Débarquement")
+        self.add_animation([(to_cell.x, to_cell.y)], (80, 160, 90), 16)
+        return True
+
+    def clear_order_modes(self):
+        self.selected_army_cell = None
+        self.move_targets.clear()
+        self.attack_targets.clear()
+        self.ranged_targets.clear()
+        self.disembark_targets.clear()
+        self.embark_targets.clear()
+        self.bridge_mode = False
+        self.bridge_targets.clear()
+        self.ranged_mode = False
+        self.preview_path_cells.clear()
+        self.move_costs = {}
+
+    def select_army_for_orders(self, cell):
+        self.selected_army_cell = cell
+        self.bridge_mode = False
+        self.bridge_targets.clear()
+        self.ranged_mode = False
+        self.move_targets, self.attack_targets = self.get_reachable_cells(cell)
+        self.disembark_targets = self.get_disembark_targets(cell)
+        self.embark_targets = self.get_embark_targets(cell)
+        if cell.army and cell.army.unit_type in UNIT_RANGED_RANGE:
+            self.ranged_targets = self.get_ranged_targets(cell)
+        else:
+            self.ranged_targets.clear()
+
+    def request_move(self, from_cell, to_cell, animate=None):
+        if not from_cell or not from_cell.army:
+            return
+        if animate is None:
+            animate = self.is_human_turn()
+        dest = (to_cell.x, to_cell.y)
+
+        def play(path, action):
+            def wrapped():
+                action()
+                if animate:
+                    self.maybe_advance_after_orders()
+
+            if animate:
+                self.fx.start_walk(from_cell, path, from_cell.army, wrapped)
+            else:
+                wrapped()
+
+        if dest in self.get_embark_targets(from_cell) and not from_cell.army.embarked:
+            path = [] if from_cell is to_cell else [to_cell]
+            play(path, lambda: self.embark_army(from_cell, to_cell))
+            return
+        if from_cell.army.embarked and dest in self.get_disembark_targets(from_cell):
+            path = [] if from_cell is to_cell else [to_cell]
+            play(path, lambda: self.disembark_army(from_cell, to_cell))
+            return
+        path_cells = self.find_path(from_cell, to_cell, from_cell.army.movement_left, from_cell.army)
+        if not path_cells:
+            self.log_event("Aucun chemin valide vers cette case")
+            return
+        play(path_cells, lambda: self.move_army(from_cell, to_cell))
+
 
     def apply_bridge_wear(self, path_cells):
         if not path_cells:
@@ -523,40 +765,52 @@ class Game:
             cell.bridge_hp = 0
             if cell.army:
                 cell.army = None
-                self.log_event("[MAP] Une armee a coule avec un pont")
-            self.log_event("[MAP] Un pont s'est effondre")
+                self.log_event("Une armée a coulé avec un pont")
+            self.log_event("Un pont s'est effondré")
             self.add_animation([(cell.x, cell.y)], (120, 150, 220), 20)
             self.update_defeat_states()
 
+    def terrain_move_cost(self, cell, moving_army):
+        """PM spent to enter a tile. Ships always pay 1."""
+        if moving_army and moving_army.embarked:
+            return 1
+        return TERRAIN_MOVE_COST.get(cell.terrain, 1)
+
+    def path_move_cost(self, path_cells, moving_army):
+        return sum(self.terrain_move_cost(cell, moving_army) for cell in path_cells)
+
     def find_path(self, from_cell, to_cell, max_range, moving_army):
-        """BFS pathfinding up to max_range. Returns list excluding start."""
+        """Dijkstra: cost is spent entering each tile. Returns list excluding start."""
         start = (from_cell.x, from_cell.y)
         goal = (to_cell.x, to_cell.y)
-        queue = deque([start])
-        came_from = {start: None}
+        if start == goal:
+            return []
         dist = {start: 0}
+        came_from = {start: None}
+        heap = [(0, start)]
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
-        while queue:
-            cx, cy = queue.popleft()
+        while heap:
+            cost, (cx, cy) = heapq.heappop(heap)
+            if cost > dist.get((cx, cy), 10**9):
+                continue
             if (cx, cy) == goal:
                 break
-            if dist[(cx, cy)] >= max_range:
-                continue
-
             for dx, dy in directions:
                 nx, ny = cx + dx, cy + dy
                 if not (0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS):
-                    continue
-                if (nx, ny) in came_from:
                     continue
                 next_cell = self.grid[nx][ny]
                 is_goal = (nx, ny) == goal
                 if not self.can_step_through(next_cell, moving_army, is_goal=is_goal):
                     continue
-                came_from[(nx, ny)] = (cx, cy)
-                dist[(nx, ny)] = dist[(cx, cy)] + 1
-                queue.append((nx, ny))
+                nd = cost + self.terrain_move_cost(next_cell, moving_army)
+                if nd > max_range:
+                    continue
+                if nd < dist.get((nx, ny), 10**9):
+                    dist[(nx, ny)] = nd
+                    came_from[(nx, ny)] = (cx, cy)
+                    heapq.heappush(heap, (nd, (nx, ny)))
 
         if goal not in came_from:
             return []
@@ -570,45 +824,31 @@ class Game:
         return [self.grid[x][y] for x, y in path_coords]
 
     def conquer_path(self, path_cells):
-        """Conquiert les cases traversées (hors eau) pendant un déplacement."""
+        """Conquiert les cases traversées (hors eau et hors villes)."""
         for cell in path_cells:
             if cell.terrain in (TerrainType.WATER,):
+                continue
+            if cell.is_city or cell.is_capital:
                 continue
             if cell.country != self.current_player_country:
                 cell.country = self.current_player_country
 
     def build_bridge_on_cell(self, cell):
-        """Construit un pont sur une case d'eau adjacente à un territoire allié."""
+        """Construit un pont uniquement sur un détroit (eau entre deux terres)."""
         player = self.players[self.current_player_country]
-
-        if cell.terrain != TerrainType.WATER:
+        if not self.is_valid_bridge_site(cell):
             return False
 
-        if cell.army:
-            return False
-
-        bridge_cost = max(40, BRIDGE_COST - player.bridge_cost_reduction)
+        bridge_cost = player.bridge_cost()
         if player.gold < bridge_cost:
             self.log_event(f"Pas assez d'or pour un pont ({player.gold}/{bridge_cost})")
-            return False
-
-        adjacent_allied = False
-        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-            nx, ny = cell.x + dx, cell.y + dy
-            if 0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS:
-                neighbor = self.grid[nx][ny]
-                if neighbor.country == self.current_player_country and neighbor.terrain != TerrainType.WATER:
-                    adjacent_allied = True
-                    break
-
-        if not adjacent_allied:
             return False
 
         player.spend_gold(bridge_cost)
         cell.terrain = TerrainType.BRIDGE
         cell.country = self.current_player_country
         cell.bridge_hp = 3 + player.bridge_hp_bonus
-        self.log_event(f"[OK] Pont construit. Or: {player.gold}")
+        self.log_event(f"Pont construit. Or: {player.gold}")
         self.add_animation([(cell.x, cell.y)], (200, 170, 110), 18)
         return True
 
@@ -616,43 +856,66 @@ class Game:
         targets = set()
         for x in range(GRID_COLS):
             for y in range(GRID_ROWS):
-                cell = self.grid[x][y]
-                if cell.terrain != TerrainType.WATER or cell.army:
-                    continue
-                if self.build_bridge_on_cell_preview(cell):
+                if self.is_valid_bridge_site(self.grid[x][y]):
                     targets.add((x, y))
         self.bridge_targets = targets
 
-    def build_bridge_on_cell_preview(self, cell):
-        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-            nx, ny = cell.x + dx, cell.y + dy
-            if 0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS:
-                neighbor = self.grid[nx][ny]
-                if neighbor.country == self.current_player_country and neighbor.terrain != TerrainType.WATER:
-                    return True
-        return False
+    def _neighbor_at(self, cell, dx, dy):
+        nx, ny = cell.x + dx, cell.y + dy
+        if 0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS:
+            return self.grid[nx][ny]
+        return None
+
+    def is_valid_bridge_site(self, cell):
+        if not cell or cell.terrain != TerrainType.WATER or cell.army:
+            return False
+        north = self._neighbor_at(cell, 0, -1)
+        south = self._neighbor_at(cell, 0, 1)
+        west = self._neighbor_at(cell, -1, 0)
+        east = self._neighbor_at(cell, 1, 0)
+
+        def is_shore(tile):
+            return tile is not None and tile.terrain in SHORE_TERRAINS
+
+        crossing = (is_shore(north) and is_shore(south)) or (is_shore(west) and is_shore(east))
+        if not crossing:
+            return False
+        return any(
+            neighbor.country == self.current_player_country and neighbor.terrain in SHORE_TERRAINS
+            for neighbor in self._neighbors(cell)
+        )
+
+    def has_adjacent_bridge_site(self, cell):
+        if not cell:
+            return False
+        return any(self.is_valid_bridge_site(neighbor) for neighbor in self._neighbors(cell))
 
     def reset_army_moves_for_country(self, country):
         for x in range(GRID_COLS):
             for y in range(GRID_ROWS):
                 cell = self.grid[x][y]
                 if cell.army and cell.army.country == country:
-                    cell.army.has_moved = False
-                    cell.army.movement_left = UNIT_MOVEMENT_RANGE.get(cell.army.unit_type, MOVEMENT_RANGE)
+                    cell.army.refresh_movement(self.players.get(country))
 
     def get_reachable_cells(self, from_cell):
         """Retourne les cibles atteignables et attaquables depuis une armée."""
         move_targets = set()
         attack_targets = set()
+        costs = {}
         if not from_cell or not from_cell.army:
+            self.move_costs = costs
             return move_targets, attack_targets
         if from_cell.army.has_moved:
+            self.move_costs = costs
             return move_targets, attack_targets
 
         max_range = from_cell.army.movement_left
         engaged_targets = self.get_adjacent_enemy_cells(from_cell, self.current_player_country)
         if engaged_targets:
             attack_targets |= engaged_targets
+            for pos in engaged_targets:
+                costs[pos] = 1
+            self.move_costs = costs
             return move_targets, attack_targets
 
         for x in range(GRID_COLS):
@@ -663,11 +926,14 @@ class Game:
                 path_cells = self.find_path(from_cell, target, max_range, from_cell.army)
                 if not path_cells:
                     continue
-
-                if target.army and target.army.country != self.current_player_country:
+                costs[(x, y)] = self.path_move_cost(path_cells, from_cell.army)
+                if (target.army and target.army.country != self.current_player_country) or self.is_enemy_urban(
+                    target, self.current_player_country
+                ):
                     attack_targets.add((x, y))
                 else:
                     move_targets.add((x, y))
+        self.move_costs = costs
         return move_targets, attack_targets
 
     def check_victory(self):
@@ -678,7 +944,7 @@ class Game:
         if len(alive) == 1 and self.winner_country != alive[0]:
             self.winner_country = alive[0]
             self.game_over_message = f"Victoire: {COUNTRY_NAMES[alive[0]]} (dernier royaume)"
-            self.log_event(f"[WIN] {COUNTRY_NAMES[alive[0]]} est le dernier royaume debout")
+            self.log_event(f"{COUNTRY_NAMES[alive[0]]} est le dernier royaume debout")
             self.audio.play("victory")
             return
 
@@ -695,8 +961,8 @@ class Game:
             if self.winner_country != winner:
                 self.winner_country = winner
                 self.game_over_message = f"Victoire: {COUNTRY_NAMES[winner]} (toutes les capitales)"
-                print(f"[WIN] {COUNTRY_NAMES[winner]} contrôle toutes les capitales !")
-                self.log_event(f"[WIN] {COUNTRY_NAMES[winner]} controle toutes les capitales")
+                print(f"{COUNTRY_NAMES[winner]} contrôle toutes les capitales !")
+                self.log_event(f"{COUNTRY_NAMES[winner]} controle toutes les capitales")
                 self.audio.play("victory")
 
     def country_has_anything(self, country):
@@ -779,17 +1045,18 @@ class Game:
         loser_player.gold = max(0, loser_player.gold - loot)
         if conqueror != Country.NONE:
             self.players[conqueror].gold += loot
+            self.gold_looted[conqueror] = self.gold_looted.get(conqueror, 0) + loot
 
         self.defeated_countries.add(loser)
         self.occupation_tracker.pop(loser, None)
         self.log_event(
-            f"[ELIMINATION] {COUNTRY_NAMES[conqueror]} absorbe {COUNTRY_NAMES[loser]} "
+            f"{COUNTRY_NAMES[conqueror]} absorbe {COUNTRY_NAMES[loser]} "
             f"(+{loot} or, {transferred} cases)"
         )
 
         if loser == Country.RED and self.game_mode == "solo" and not self.is_game_over():
             self.player_defeated = True
-            self.game_over_message = "Defaite: votre royaume est elimine"
+            self.game_over_message = "Défaite : votre royaume est éliminé"
             self.audio.play("defeat")
 
     def update_defeat_states(self):
@@ -810,7 +1077,7 @@ class Game:
             else:
                 self.log_event(f"Pas assez d'or pour {next_tech['name']} ({next_tech['cost']})")
             return
-        self.log_event(f"[TECH] {COUNTRY_NAMES[player.country]} debloque {tech['name']}")
+        self.log_event(f"{COUNTRY_NAMES[player.country]} débloque {tech['name']}")
 
     def _get_loser_urban_cells(self, loser):
         urban_cells = []
@@ -865,9 +1132,10 @@ class Game:
             loot = max(0, int(loser_player.gold * DEFEAT_LOOT_RATIO))
             loser_player.gold -= loot
             occupier_player.gold += loot
+            self.gold_looted[occupier] = self.gold_looted.get(occupier, 0) + loot
 
             self.log_event(
-                f"[ANNEX] {COUNTRY_NAMES[occupier]} prend {COUNTRY_NAMES[loser]} (+{loot} or, {transferred} cases)"
+                f"{COUNTRY_NAMES[occupier]} prend {COUNTRY_NAMES[loser]} (+{loot} or, {transferred} cases)"
             )
             self.defeated_countries.add(loser)
             self.check_victory()
@@ -917,12 +1185,57 @@ class Game:
             return True
         return self.current_player_country == SOLO_HUMAN_COUNTRY and not self.ai_turn_pending
 
+    def count_idle_armies(self, country):
+        idle = 0
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                army = self.grid[x][y].army
+                if army and army.country == country and army.movement_left > 0:
+                    idle += 1
+        return idle
+
+    def idle_army_cells(self, country):
+        cells = []
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = self.grid[x][y]
+                if cell.army and cell.army.country == country and cell.army.movement_left > 0:
+                    cells.append(cell)
+        return cells
+
+    def select_next_idle_army(self):
+        country = self.current_player_country
+        idle = self.idle_army_cells(country)
+        if not idle:
+            self.clear_order_modes()
+            return False
+        current = self.selected_cell
+        nxt = idle[0]
+        if current in idle:
+            nxt = idle[(idle.index(current) + 1) % len(idle)]
+        if self.selected_cell:
+            self.selected_cell.is_selected = False
+        self.selected_cell = nxt
+        nxt.is_selected = True
+        self.select_army_for_orders(nxt)
+        self.log_event(f"{UNIT_NAMES[nxt.army.unit_type]} sélectionné")
+        return True
+
+    def maybe_advance_after_orders(self):
+        if not self.is_human_turn():
+            return
+        cell = self.selected_cell
+        if cell and cell.army and cell.army.country == self.current_player_country and cell.army.movement_left > 0:
+            self.select_army_for_orders(cell)
+            return
+        self.select_next_idle_army()
+
     def get_ai_turn_delay_ms(self):
         return AI_SPEED_DELAYS_MS.get(self.settings.get("ai_speed", "normal"), 1000)
 
     def next_turn(self):
         """Passe au tour suivant"""
-        if self.is_game_over() or self.pause_menu.open:
+        if self.is_game_over() or self.pause_menu.open or self.fx.is_busy():
             return
 
         self.update_defeat_states()
@@ -953,6 +1266,7 @@ class Game:
             return
     
         self.log_event(f"Tour de {COUNTRY_NAMES[self.current_player_country]}")
+        self.fx.show_banner(f"Tour de {COUNTRY_NAMES[self.current_player_country]}")
         
         player = self.players[self.current_player_country]
         if self.current_player_country in self.defeated_countries:
@@ -971,6 +1285,7 @@ class Game:
             self.ai_turn_resume_at = pygame.time.get_ticks() + self.get_ai_turn_delay_ms()
         elif self.is_human_turn():
             self.audio.play("turn")
+            self.select_next_idle_army()
 
     def _autosave(self):
         if self.state != "playing":
@@ -997,7 +1312,7 @@ class Game:
                         cities += 1
 
         # Revenu des capitales et villes
-        capital_income = capitals * 100
+        capital_income = capitals * (CAPITAL_INCOME + player.capital_income_bonus)
         city_income = cities * (CITY_INCOME + player.city_income_bonus)
         income = capital_income + city_income
 
@@ -1029,6 +1344,9 @@ class Game:
                     cell = self.grid[x][y]
                     if cell.is_capital and cell.capital_owner == country:
                         cell.army = Army(country, UnitType.SWORDSMAN, 3)
+                        player = self.players.get(country)
+                        if player:
+                            cell.army.refresh_movement(player)
                         break
 
     def apply_terrain(self, coords, terrain):
@@ -1065,10 +1383,19 @@ class Game:
                 elif action == "start_godgame":
                     self.start_game("godgame")
                 elif action == "load":
-                    if load_game(self):
-                        self.log_event("Partie chargee")
+                    try:
+                        loaded = load_game(self)
+                    except Exception as err:
+                        loaded = False
+                        print(f"Chargement impossible: {err}")
+                    if loaded:
+                        if hasattr(self, "audio") and self.audio:
+                            self.audio.play_music("game")
+                        self.log_event("Partie chargée")
                         self.audio.play("click")
+                        self.select_next_idle_army()
                     else:
+                        self.menu.load_error = "Pas de sauvegarde compatible (nouvelle partie requise)"
                         print(f"Aucune sauvegarde valide ({SAVE_PATH})")
                 elif action == "quit":
                     self.running = False
@@ -1078,6 +1405,9 @@ class Game:
                     continue
 
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    if self.selected_army_cell or self.bridge_mode or self.ranged_mode:
+                        self.clear_order_modes()
+                        continue
                     if not self.is_game_over():
                         if self.pause_menu.open and self.pause_menu.submenu == "settings":
                             self.pause_menu.leave_settings(self)
@@ -1091,149 +1421,165 @@ class Game:
                     pause_action = self.pause_menu.handle_event(event, self)
                     if pause_action == "save":
                         self._autosave()
-                        self.log_event("Partie sauvegardee")
+                        self.log_event("Partie sauvegardée")
                     elif pause_action == "quit_menu":
                         self._autosave()
                         self.state = "menu"
                         self.menu = Menu(self.screen)
                         self.pause_menu.close()
+                        self.audio.play_music("menu")
                     continue
 
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_s:
-                    if event.mod & pygame.KMOD_CTRL:
-                        self._autosave()
-                        self.log_event("Partie sauvegardee (Ctrl+S)")
-                        continue
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_s and event.mod & pygame.KMOD_CTRL:
+                    self._autosave()
+                    self.log_event("Partie sauvegardée (Ctrl+S)")
+                    continue
+
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                    if self.is_human_turn() and not self.fx.is_busy() and not self.is_game_over():
+                        self.next_turn()
+                    continue
+
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_n, pygame.K_TAB):
+                    if self.is_human_turn() and not self.fx.is_busy() and not self.is_game_over():
+                        self.select_next_idle_army()
+                    continue
 
                 if self.is_game_over():
                     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                         self.state = "menu"
                         self.menu = Menu(self.screen)
+                        self.audio.play_music("menu")
+                    elif event.type == pygame.KEYDOWN:
+                        self.state = "menu"
+                        self.menu = Menu(self.screen)
+                        self.audio.play_music("menu")
+                    continue
+
+                if self.fx.is_busy():
+                    continue
+
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                    self.clear_order_modes()
                     continue
 
                 if not self.is_human_turn():
                     continue
 
-                # Gestion UI
                 ui_action = self.ui.handle_event(event, self)
                 if ui_action == "end_turn":
                     self.next_turn()
+                    continue
+                elif ui_action == "next_unit":
+                    self.select_next_idle_army()
                     continue
                 elif ui_action == "build_city":
                     self.build_city()
                     continue
                 elif ui_action == "build_bridge":
                     if not self.selected_cell or self.selected_cell.country != self.current_player_country:
-                        self.log_event("Selectionne une case alliee puis choisis Construire pont")
+                        self.log_event("Sélectionne une case alliée puis choisis Construire pont")
                     else:
                         self.bridge_mode = True
                         self.compute_bridge_targets()
-                        self.log_event("Mode pont: clique une case d'eau en surbrillance")
+                        self.log_event("Mode pont : clique une case d'eau en surbrillance")
                     continue
                 elif ui_action == "research_next":
                     self.research_next_tech()
                     continue
                 elif ui_action == "fortify":
-                    self.ranged_mode = False
-                    self.ranged_targets.clear()
                     self.fortify_selected_army()
+                    self.maybe_advance_after_orders()
                     continue
                 elif ui_action == "ranged_attack_mode":
-                    if (
-                        self.selected_cell
-                        and self.selected_cell.army
-                        and self.selected_cell.army.country == self.current_player_country
-                    ):
-                        self.ranged_mode = True
-                        self.ranged_targets = self.get_ranged_targets(self.selected_cell)
-                        self.log_event("[RANGE] Choisis une cible a distance")
+                    if self.selected_cell and self.selected_cell.army:
+                        self.select_army_for_orders(self.selected_cell)
+                        self.log_event("Clique une cible violette")
                     continue
-                elif ui_action == "move_army":
-                    if (
-                        self.selected_cell
-                        and self.selected_cell.army
-                        and self.selected_cell.army.country == self.current_player_country
-                    ):
-                        self.selected_army_cell = self.selected_cell
-                        self.bridge_mode = False
-                        self.bridge_targets.clear()
-                        self.ranged_mode = False
-                        self.ranged_targets.clear()
-                        self.move_targets, self.attack_targets = self.get_reachable_cells(self.selected_army_cell)
-                        self.log_event(f"[MOVE] Choisis la destination de {UNIT_NAMES[self.selected_cell.army.unit_type]}")
+                elif ui_action == "disembark_mode":
+                    cell = self.selected_cell
+                    if cell and cell.army and (cell.x, cell.y) in self.get_disembark_targets(cell):
+                        self.disembark_army(cell, cell)
+                        self.clear_order_modes()
+                        self.maybe_advance_after_orders()
+                    elif cell and cell.army:
+                        self.select_army_for_orders(cell)
+                        self.log_event("Clique une plage ou une terre verte")
                     continue
-                elif ui_action and ui_action[0] == "recruit":
-                    unit_type = ui_action[1]
-                    self.recruit_unit(unit_type)
+                elif ui_action in ("move_army", "embark_mode"):
+                    if self.selected_cell and self.selected_cell.army:
+                        self.select_army_for_orders(self.selected_cell)
                     continue
-                
-                # Clic sur la map
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    x, y = event.pos
-                    cell_x = x // CELL_SIZE
-                    cell_y = y // CELL_SIZE
+                elif isinstance(ui_action, tuple) and ui_action[0] == "recruit":
+                    self.recruit_unit(ui_action[1])
+                    continue
+                elif ui_action == "hud_click":
+                    continue
 
-                    if 0 <= cell_x < GRID_COLS and 0 <= cell_y < GRID_ROWS:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    coords = screen_to_cell(*event.pos)
+                    if coords:
+                        cell_x, cell_y = coords
                         if (cell_x, cell_y) not in self.visibility:
-                            self.log_event("Zone non visible (fog of war)")
+                            self.log_event("Zone non visible (brouillard)")
                             continue
                         clicked_cell = self.grid[cell_x][cell_y]
+                        dest = (cell_x, cell_y)
 
                         if self.bridge_mode:
                             built = self.build_bridge_on_cell(clicked_cell)
                             if not built:
-                                self.log_event("Pont impossible ici (case d'eau adjacente requise)")
+                                self.log_event("Pont impossible ici")
                             self.bridge_mode = False
                             self.bridge_targets.clear()
                             continue
 
-                        if self.ranged_mode:
-                            if self.selected_cell and self.selected_cell.army:
-                                if (cell_x, cell_y) in self.ranged_targets:
-                                    self.ranged_attack(self.selected_cell, clicked_cell)
-                                else:
-                                    self.log_event("Cible hors portee de tir")
-                            self.ranged_mode = False
-                            self.ranged_targets.clear()
+                        if self.selected_army_cell and dest in self.ranged_targets:
+                            self.ranged_attack(self.selected_army_cell, clicked_cell)
+                            self.clear_order_modes()
+                            self.maybe_advance_after_orders()
                             continue
 
-                        # Si on a déjà une armée sélectionnée pour le mouvement
-                        if self.selected_army_cell:
-                            # Tente de déplacer vers la case cliquée
-                            self.move_army(self.selected_army_cell, clicked_cell)
-                            self.selected_army_cell = None
-                            self.move_targets.clear()
-                            self.attack_targets.clear()
-                            self.ranged_targets.clear()
-                            self.preview_path_cells.clear()
+                        order_tiles = self.move_targets | self.attack_targets | self.embark_targets | self.disembark_targets
+                        if self.selected_army_cell and dest in order_tiles:
+                            self.request_move(self.selected_army_cell, clicked_cell)
+                            self.clear_order_modes()
+                            continue
 
-                        # Sinon, sélection normale
+                        own_army = (
+                            clicked_cell.army
+                            and clicked_cell.army.country == self.current_player_country
+                            and clicked_cell.army.movement_left > 0
+                        )
+                        if self.selected_cell:
+                            self.selected_cell.is_selected = False
+                        self.selected_cell = clicked_cell
+                        self.selected_cell.is_selected = True
+                        self.audio.play("click")
+                        if own_army:
+                            self.select_army_for_orders(clicked_cell)
+                            self.log_event(f"{UNIT_NAMES[clicked_cell.army.unit_type]} sélectionné")
                         else:
-                            if self.selected_cell:
-                                self.selected_cell.is_selected = False
-
+                            self.clear_order_modes()
                             self.selected_cell = clicked_cell
                             self.selected_cell.is_selected = True
-                            self.move_targets.clear()
-                            self.attack_targets.clear()
-                            self.ranged_targets.clear()
-                            self.preview_path_cells.clear()
-
-                            self.audio.play("click")
-                            self.log_event(f"Case ({cell_x},{cell_y}) {self.selected_cell.terrain.name}")
+                            self.log_event(f"Case ({cell_x},{cell_y}) {TERRAIN_FULL_NAMES[clicked_cell.terrain]}")
                 elif event.type == pygame.MOUSEMOTION:
-                    x, y = event.pos
-                    cell_x = x // CELL_SIZE
-                    cell_y = y // CELL_SIZE
-                    if 0 <= cell_x < GRID_COLS and 0 <= cell_y < GRID_ROWS:
+                    coords = screen_to_cell(*event.pos)
+                    if coords:
+                        cell_x, cell_y = coords
                         self.hovered_cell = self.grid[cell_x][cell_y]
-                        if self.selected_army_cell and self.selected_army_cell.army and (cell_x, cell_y) in self.visibility:
-                            self.preview_path_cells = self.find_path(
-                                self.selected_army_cell,
-                                self.hovered_cell,
-                                self.selected_army_cell.army.movement_left,
-                                self.selected_army_cell.army,
-                            )
+                        dest = (cell_x, cell_y)
+                        if self.selected_army_cell and self.selected_army_cell.army and dest in self.visibility:
+                            if dest in self.disembark_targets or dest in self.embark_targets:
+                                self.preview_path_cells = [self.hovered_cell]
+                            else:
+                                self.preview_path_cells = self.find_path(
+                                    self.selected_army_cell,
+                                    self.hovered_cell,
+                                    self.selected_army_cell.army.movement_left,
+                                    self.selected_army_cell.army,
+                                )
                         else:
                             self.preview_path_cells = []
                     else:
@@ -1279,75 +1625,85 @@ class Game:
         for animation in self.animations:
             animation["ttl"] -= 1
         self.animations = [a for a in self.animations if a["ttl"] > 0]
+        self.fx.update()
 
         if (
             self.state == "playing"
             and not self.pause_menu.open
             and self.ai_turn_pending
             and not self.is_game_over()
+            and not self.fx.is_busy()
             and pygame.time.get_ticks() >= self.ai_turn_resume_at
         ):
             self.ai_turn_pending = False
             self.next_turn()
-    
+
     def draw(self):
         if self.state == "menu":
+            self.audio.play_music("menu")
             self.menu.draw()
-        
-        elif self.state == "playing":
-            self.screen.fill((0, 0, 0))
+            return
+
+        if self.state == "playing":
+            self.screen.fill((42, 32, 22))
             self.compute_visibility()
-            
+            tick = pygame.time.get_ticks()
+            hidden = self.fx.hidden_army_cells()
+
             for x in range(GRID_COLS):
                 for y in range(GRID_ROWS):
                     cell = self.grid[x][y]
                     is_visible = (x, y) in self.visibility
                     is_discovered = self.get_viewer_country() in cell.discovered_by
+                    show_units = is_visible and (x, y) not in hidden
                     if is_visible:
-                        cell.draw(self.screen, self.assets, show_units=True)
+                        cell.draw(self.screen, self.assets, show_units=show_units, tick=tick, grid=self.grid)
                     elif is_discovered:
-                        cell.draw(self.screen, self.assets, show_units=False)
+                        cell.draw(self.screen, self.assets, show_units=False, tick=tick, grid=self.grid)
                     else:
-                        # Unknown tile stays fully hidden.
                         pygame.draw.rect(
                             self.screen,
-                            (0, 0, 0),
-                            (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE),
+                            (18, 14, 10),
+                            (*cell_screen_pos(x, y), CELL_SIZE, CELL_SIZE),
                         )
 
-            # Highlights de déplacement / attaque
-            for x, y in self.move_targets:
-                if (x, y) not in self.visibility:
-                    continue
-                highlight = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                highlight.fill((52, 152, 219, 70))
-                self.screen.blit(highlight, (x * CELL_SIZE, y * CELL_SIZE))
-            for x, y in self.attack_targets:
-                if (x, y) not in self.visibility:
-                    continue
-                highlight = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                highlight.fill((231, 76, 60, 85))
-                self.screen.blit(highlight, (x * CELL_SIZE, y * CELL_SIZE))
-            for x, y in self.bridge_targets:
-                if (x, y) not in self.visibility:
-                    continue
-                highlight = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                highlight.fill((200, 170, 110, 95))
-                self.screen.blit(highlight, (x * CELL_SIZE, y * CELL_SIZE))
-            for x, y in self.ranged_targets:
-                if (x, y) not in self.visibility:
-                    continue
-                highlight = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                highlight.fill((170, 110, 220, 105))
-                self.screen.blit(highlight, (x * CELL_SIZE, y * CELL_SIZE))
-            for cell in self.preview_path_cells:
-                if (cell.x, cell.y) not in self.visibility:
-                    continue
-                preview = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                preview.fill((255, 245, 120, 85))
-                self.screen.blit(preview, (cell.x * CELL_SIZE, cell.y * CELL_SIZE))
+            if self.is_human_turn():
+                pulse_a = 50 + int(40 * (0.5 + 0.5 * math.sin(tick / 180)))
+                viewer = self.get_ui_country()
+                for x in range(GRID_COLS):
+                    for y in range(GRID_ROWS):
+                        army = self.grid[x][y].army
+                        if not army or army.country != viewer or army.movement_left <= 0:
+                            continue
+                        if (x, y) not in self.visibility:
+                            continue
+                        glow = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+                        pygame.draw.rect(
+                            glow,
+                            (212, 168, 78, pulse_a),
+                            glow.get_rect().inflate(-8, -8),
+                            2,
+                        )
+                        self.screen.blit(glow, cell_screen_pos(x, y))
 
-            # Fog of war
+            def blit_highlight(cells, fill, rim=None):
+                for hx, hy in cells:
+                    if (hx, hy) not in self.visibility:
+                        continue
+                    highlight = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+                    highlight.fill(fill)
+                    if rim:
+                        pygame.draw.rect(highlight, rim, highlight.get_rect().inflate(-2, -2), 2)
+                    self.screen.blit(highlight, cell_screen_pos(hx, hy))
+
+            blit_highlight(self.move_targets, (48, 160, 62, 120), (230, 255, 210, 230))
+            blit_highlight(self.attack_targets, (180, 36, 28, 130), (255, 190, 170, 240))
+            blit_highlight(self.bridge_targets, (180, 140, 60, 110), (255, 220, 140, 220))
+            blit_highlight(self.ranged_targets, (120, 60, 150, 120), (230, 190, 255, 230))
+            blit_highlight(self.embark_targets, (36, 90, 140, 120), (170, 210, 255, 230))
+            blit_highlight(self.disembark_targets, (40, 120, 70, 120), (190, 255, 190, 230))
+            self.draw_movement_preview()
+
             for x in range(GRID_COLS):
                 for y in range(GRID_ROWS):
                     cell = self.grid[x][y]
@@ -1355,46 +1711,37 @@ class Game:
                         continue
                     fog_tile = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
                     if self.get_viewer_country() in cell.discovered_by:
-                        fog_tile.fill((12, 14, 18, 220))
+                        fog_tile.fill((92, 72, 44, 150))
                     else:
-                        fog_tile.fill((0, 0, 0, 250))
-                    self.screen.blit(fog_tile, (x * CELL_SIZE, y * CELL_SIZE))
+                        fog_tile.fill((28, 20, 12, 245))
+                    self.screen.blit(fog_tile, cell_screen_pos(x, y))
 
             for animation in self.animations:
                 alpha = max(20, int(180 * (animation["ttl"] / animation["max_ttl"])))
-                for x, y in animation["cells"]:
+                for ax, ay in animation["cells"]:
                     pulse = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
                     pulse.fill((*animation["color"], alpha))
-                    self.screen.blit(pulse, (x * CELL_SIZE, y * CELL_SIZE))
-            
+                    self.screen.blit(pulse, cell_screen_pos(ax, ay))
+
+            self.fx.draw(self.screen)
             self.ui.draw(self)
             self.draw_tooltip()
             self.tutorial.draw(self.screen)
             self.pause_menu.draw(self)
-
             if self.is_game_over():
-                panel = pygame.Surface((GRID_COLS * CELL_SIZE, 72), pygame.SRCALPHA)
-                panel.fill((15, 15, 20, 220))
-                self.screen.blit(panel, (0, WINDOW_HEIGHT // 2 - 36))
-                font = pygame.font.Font(None, 34)
-                msg = self.game_over_message if self.game_over_message else "Partie terminee"
-                text = font.render(msg, True, (255, 230, 120))
-                rect = text.get_rect(center=(GRID_COLS * CELL_SIZE // 2, WINDOW_HEIGHT // 2 - 8))
-                self.screen.blit(text, rect)
-                hint_font = pygame.font.Font(None, 24)
-                hint = hint_font.render("Clique pour retourner au menu", True, (220, 220, 220))
-                hint_rect = hint.get_rect(center=(GRID_COLS * CELL_SIZE // 2, WINDOW_HEIGHT // 2 + 22))
-                self.screen.blit(hint, hint_rect)
-            
+                draw_end_recap(self.screen, self)
             pygame.display.flip()
     
     def run(self):
         while self.running:
-            self.handle_events()
-            self.update()
-            self.draw()
+            try:
+                self.handle_events()
+                self.update()
+                self.draw()
+            except Exception:
+                import traceback
+                traceback.print_exc()
             self.clock.tick(60)
-        
         pygame.quit()
         sys.exit()
 
@@ -1413,37 +1760,152 @@ class Game:
         })
 
     def draw_tooltip(self):
-        if not self.hovered_cell:
+        if not self.hovered_cell or not self.ui:
             return
         x, y = pygame.mouse.get_pos()
-        if x >= GRID_COLS * CELL_SIZE:
+        if self.ui.blocks_map((x, y)):
+            return
+        if x >= MAP_PIXEL_WIDTH or y < MAP_ORIGIN_Y:
             return
         if (self.hovered_cell.x, self.hovered_cell.y) not in self.visibility:
             return
 
+        cell = self.hovered_cell
         lines = [
-            f"({self.hovered_cell.x},{self.hovered_cell.y})",
-            f"Terrain: {TERRAIN_FULL_NAMES[self.hovered_cell.terrain]}",
-            f"Pays: {COUNTRY_NAMES[self.hovered_cell.country]}",
+            f"{TERRAIN_FULL_NAMES[cell.terrain]}  ({cell.x},{cell.y})",
+            COUNTRY_NAMES[cell.country] if cell.country != Country.NONE else "Neutre",
         ]
-        if self.hovered_cell.terrain == TerrainType.BRIDGE:
-            lines.append(f"Pont HP: {self.hovered_cell.bridge_hp}")
-        if self.hovered_cell.army:
+        if cell.is_capital:
+            lines.append("Capitale")
+            lines.append(f"Murs +{CAPITAL_WALL_BONUS}. Garnison {CAPITAL_GARRISON_COUNT} lanciers")
+        elif cell.is_city:
+            lines.append("Ville")
+            lines.append(f"Murs +{CITY_WALL_BONUS}. Garnison {CITY_GARRISON_COUNT} lanciers")
+        move_cost = TERRAIN_MOVE_COST.get(cell.terrain, 1)
+        if cell.terrain != TerrainType.WATER:
+            lines.append(f"Coût de déplacement : {move_cost} PM")
+        bonus = TERRAIN_DEFENSE_BONUS.get(cell.terrain, 0)
+        if bonus:
+            lines.append(f"Défense terrain +{bonus}")
+        if cell.terrain == TerrainType.BRIDGE:
+            lines.append(f"Pont  {cell.bridge_hp} PV")
+        if cell.army:
+            army = cell.army
+            ship = " navire" if army.embarked else ""
             lines.append(
-                f"{UNIT_NAMES[self.hovered_cell.army.unit_type]} x{self.hovered_cell.army.count} PM:{self.hovered_cell.army.movement_left}"
+                f"{UNIT_NAMES[army.unit_type]}{ship}  x{army.count}"
+            )
+            lines.append(f"Mouvement {army.movement_left}/{army.movement_range(self.players.get(army.country))}")
+            stats = UNIT_STATS[army.unit_type]
+            lines.append(f"Att {stats['attack']}  Déf {stats['defense']}")
+        dest = (cell.x, cell.y)
+        if self.selected_army_cell and self.selected_army_cell.army:
+            army = self.selected_army_cell.army
+            cost = getattr(self, "move_costs", {}).get(dest)
+            if dest in self.move_targets and cost is not None:
+                left = max(0, army.movement_left - cost)
+                if left <= 0:
+                    lines.append(f"L'armée s'arrête ici ({cost} PM)")
+                else:
+                    lines.append(f"{cost} PM. Encore {left} après")
+            elif dest in self.attack_targets:
+                lines.append("Attaque : l'armée avance jusqu'ici")
+            elif dest in self.embark_targets:
+                lines.append("Embarquement : l'armée s'arrête sur l'eau")
+            elif dest in self.disembark_targets:
+                lines.append("Débarquement : l'armée s'arrête à terre")
+
+        from theme import INK, PARCHMENT, GOLD, WOOD_DARK, load_font, draw_bevel_rect, wrap_text
+
+        font = load_font(16)
+        max_line = 240
+        wrapped = []
+        for line in lines:
+            wrapped.extend(wrap_text(font, line, max_line))
+        width = max(max_line, max(font.size(line)[0] for line in wrapped) + 20)
+        height = len(wrapped) * 18 + 14
+        tx = x + 16
+        ty = y + 16
+        if tx + width > MAP_PIXEL_WIDTH - 4:
+            tx = x - width - 12
+        if ty + height > WINDOW_HEIGHT - 4:
+            ty = y - height - 12
+        tx = max(4, min(tx, MAP_PIXEL_WIDTH - width - 4))
+        ty = max(MAP_ORIGIN_Y + 4, min(ty, WINDOW_HEIGHT - height - 4))
+        rect = pygame.Rect(tx, ty, width, height)
+        draw_bevel_rect(self.screen, rect, PARCHMENT, GOLD, WOOD_DARK, 2)
+        pygame.draw.rect(self.screen, GOLD, rect, 1)
+        for idx, line in enumerate(wrapped):
+            self.screen.blit(font.render(line, True, INK), (tx + 10, ty + 7 + idx * 18))
+
+    def draw_movement_preview(self):
+        """Chemin, limite de portée et fantôme d'arrivée."""
+        from theme import CREAM, GOLD, GOLD_BRIGHT, INK, load_font
+
+        army_cell = self.selected_army_cell
+        if not army_cell or not army_cell.army or not self.is_human_turn():
+            return
+        army = army_cell.army
+        max_range = army.movement_left
+        costs = getattr(self, "move_costs", {})
+
+        for (hx, hy), cost in costs.items():
+            if (hx, hy) not in self.move_targets:
+                continue
+            if (hx, hy) not in self.visibility:
+                continue
+            if cost != max_range:
+                continue
+            rect = pygame.Rect(*cell_screen_pos(hx, hy), CELL_SIZE, CELL_SIZE)
+            pygame.draw.rect(self.screen, GOLD, rect.inflate(-3, -3), 2)
+
+        path = self.preview_path_cells or []
+        if not path:
+            return
+        for cell in path[:-1]:
+            if (cell.x, cell.y) not in self.visibility:
+                continue
+            cx, cy = cell_screen_pos(cell.x, cell.y)
+            pygame.draw.circle(
+                self.screen,
+                CREAM,
+                (cx + CELL_SIZE // 2, cy + CELL_SIZE // 2),
+                5,
+            )
+            pygame.draw.circle(
+                self.screen,
+                INK,
+                (cx + CELL_SIZE // 2, cy + CELL_SIZE // 2),
+                5,
+                1,
             )
 
-        font = pygame.font.Font(None, 18)
-        width = max(font.size(line)[0] for line in lines) + 12
-        height = len(lines) * 18 + 10
-        tx = min(x + 12, GRID_COLS * CELL_SIZE - width - 4)
-        ty = min(y + 12, WINDOW_HEIGHT - height - 4)
-        bg = pygame.Surface((width, height), pygame.SRCALPHA)
-        bg.fill((20, 20, 24, 230))
-        self.screen.blit(bg, (tx, ty))
-        for idx, line in enumerate(lines):
-            text = font.render(line, True, (230, 230, 230))
-            self.screen.blit(text, (tx + 6, ty + 5 + idx * 18))
+        dest = path[-1]
+        if (dest.x, dest.y) not in self.visibility:
+            return
+        dx, dy = cell_screen_pos(dest.x, dest.y)
+        dest_rect = pygame.Rect(dx, dy, CELL_SIZE, CELL_SIZE)
+        pygame.draw.rect(self.screen, GOLD_BRIGHT, dest_rect.inflate(-1, -1), 3)
+        pygame.draw.rect(self.screen, INK, dest_rect.inflate(-4, -4), 1)
+
+        ghost = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+        draw_army_at(ghost, 0, 0, army, self.assets)
+        ghost.set_alpha(155)
+        self.screen.blit(ghost, (dx, dy))
+
+        cost = costs.get((dest.x, dest.y), len(path))
+        left = max(0, max_range - cost)
+        font = load_font(14, bold=True)
+        label = "Arrêt" if left <= 0 else f"reste {left}"
+        text = font.render(label, True, INK)
+        pad = pygame.Rect(0, 0, text.get_width() + 8, text.get_height() + 4)
+        pad.midbottom = (dx + CELL_SIZE // 2, dy - 2)
+        if pad.top < HUD_TOP:
+            pad.midtop = (dx + CELL_SIZE // 2, dy + CELL_SIZE + 2)
+        pygame.draw.rect(self.screen, GOLD_BRIGHT, pad)
+        pygame.draw.rect(self.screen, INK, pad, 1)
+        self.screen.blit(text, text.get_rect(center=pad.center))
+
 
 if __name__ == "__main__":
     game = Game()

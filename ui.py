@@ -1,488 +1,318 @@
 import pygame
 from constants import *
 from menu import Button
+from theme import (
+    CREAM,
+    GOLD,
+    GOLD_BRIGHT,
+    INK,
+    INK_SOFT,
+    PARCHMENT,
+    WOOD,
+    WOOD_DARK,
+    WOOD_LIGHT,
+    blit_outlined,
+    draw_bevel_rect,
+    load_font,
+)
+
 
 class UI:
     def __init__(self, screen):
         self.screen = screen
-        self.font_title = pygame.font.Font(None, 28)
-        self.font_normal = pygame.font.Font(None, 22)
-        self.font_small = pygame.font.Font(None, 18)
-        
-        # Position du panneau
-        self.panel_x = GRID_COLS * CELL_SIZE
-        self.panel_y = 0
-        self.panel_width = UI_WIDTH
-        self.panel_height = WINDOW_HEIGHT
+        self.font_title = load_font(24, bold=True)
+        self.font_normal = load_font(20, bold=True)
+        self.font_small = load_font(18)
+        self.font_tiny = load_font(16)
+        self.context_rect = pygame.Rect(0, 0, 0, 0)
+        self.btn_end_turn = Button(WINDOW_WIDTH - 214, WINDOW_HEIGHT - 62, 202, 48, "Fin de tour")
+        self.btn_research = Button(WINDOW_WIDTH - 250, 8, 238, 28, "Tech")
+        self.btn_fortify = Button(0, 0, 120, 34, "Fortifier")
+        self.btn_disembark = Button(0, 0, 140, 34, "Débarquer ici")
+        self.btn_build_city = Button(0, 0, 200, 34, "Fonder une ville")
+        self.btn_build_bridge = Button(0, 0, 160, 34, "Pont")
+        self.btn_recruit_swordsman = Button(0, 0, 130, 34, "Spadassin")
+        self.btn_recruit_spearman = Button(0, 0, 120, 34, "Lancier")
+        self.btn_recruit_crossbowman = Button(0, 0, 140, 34, "Arbalétrier")
+        self.btn_recruit_cavalry = Button(0, 0, 130, 34, "Cavalerie")
+        self.btn_recruit_catapult = Button(0, 0, 130, 34, "Catapulte")
 
-        # Bouton fin de tour
-        button_width = 200
-        button_height = 50
-        self.btn_end_turn = Button(
-            self.panel_x + (UI_WIDTH - button_width) // 2,
-            WINDOW_HEIGHT - 80,
-            button_width,
-            button_height,
-            "Fin de tour",
-            (39, 174, 96),
-            (46, 204, 113)
-        )
-        
-        # Boutons d'action
-        recruit_y = 560
-        button_small_width = UI_WIDTH - 50
-        button_small_height = 30
-        spacing = 5
+    def _place(self, button, x, y, w=None):
+        if w is not None:
+            button.rect.width = w
+        button.rect.x = x
+        button.rect.y = y
+        return button.rect.right + 8
 
-        self.btn_recruit_swordsman = Button(
-            self.panel_x + 25,
-            recruit_y,
-            button_small_width,
-            button_small_height,
-            f"Spadassin ({UNIT_COSTS[UnitType.SWORDSMAN]} or)",
-            (41, 128, 185),
-            (52, 152, 219)
-        )
+    def context(self, game):
+        info = {
+            "human": game.is_human_turn(),
+            "cell": game.selected_cell,
+            "player": game.players[game.get_ui_country()],
+            "country": game.get_ui_country(),
+            "army": None,
+            "own_army": False,
+            "can_fortify": False,
+            "can_beach_land": False,
+            "can_recruit": False,
+            "already_recruited": False,
+            "can_build_city": False,
+            "can_build_bridge": False,
+            "idle": 0,
+            "hint": "N : unité suivante. Clique une ville pour produire.",
+        }
+        cell = game.selected_cell
+        info["idle"] = game.count_idle_armies(info["country"]) if info["human"] else 0
+        if not cell:
+            return info
+        own_tile = cell.country == info["country"]
+        if cell.army:
+            info["army"] = cell.army
+            info["own_army"] = cell.army.country == info["country"]
+        if info["own_army"] and info["human"] and cell.army.movement_left > 0:
+            if not cell.army.embarked:
+                info["can_fortify"] = True
+            if cell.army.embarked and cell.terrain == TerrainType.BEACH:
+                info["can_beach_land"] = True
+        urban = own_tile and (cell.is_city or cell.is_capital)
+        waterish = cell.terrain in (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
+        if urban and not waterish:
+            info["already_recruited"] = cell.last_recruit_turn == game.turn_number
+            info["can_recruit"] = info["human"] and not info["already_recruited"]
+        if (
+            info["human"]
+            and own_tile
+            and not info["own_army"]
+            and not cell.is_city
+            and not cell.is_capital
+            and not cell.army
+            and not waterish
+        ):
+            info["can_build_city"] = True
+        if (
+            info["human"]
+            and own_tile
+            and not info["own_army"]
+            and not urban
+            and game.has_adjacent_bridge_site(cell)
+        ):
+            info["can_build_bridge"] = True
+        if info["own_army"]:
+            name = UNIT_NAMES[cell.army.unit_type]
+            if cell.army.embarked:
+                info["hint"] = f"{name} en mer. Clique une plage ou une terre pour débarquer."
+            else:
+                info["hint"] = f"{name}. Les cases vertes sont ta portée. Survole pour voir l'arrêt."
+        elif info["can_recruit"]:
+            info["hint"] = "Cette ville peut produire une unité ce tour."
+        elif info["already_recruited"]:
+            info["hint"] = "Cette ville a déjà produit ce tour."
+        elif info["can_build_city"]:
+            info["hint"] = "Case libre : tu peux fonder une ville."
+        else:
+            owner = COUNTRY_SHORT.get(cell.country) or "Neutre"
+            info["hint"] = f"{TERRAIN_FULL_NAMES[cell.terrain]}, {owner}"
+        return info
 
-        self.btn_recruit_crossbowman = Button(
-            self.panel_x + 25,
-            recruit_y + button_small_height + spacing,
-            button_small_width,
-            button_small_height,
-            f"Arbalétrier ({UNIT_COSTS[UnitType.CROSSBOWMAN]} or)",
-            (142, 68, 173),
-            (155, 89, 182)
-        )
+    def layout(self, game):
+        ctx = self.context(game)
+        player = ctx["player"]
+        next_tech = player.get_next_tech()
+        if next_tech:
+            self.btn_research.text = f"{next_tech['name']}  {next_tech['cost']} or"
+        else:
+            self.btn_research.text = "Techs terminées"
+        self.btn_research.rect.x = WINDOW_WIDTH - 246
+        self.btn_research.rect.y = 6
+        self.btn_research.rect.width = 234
+        self.btn_research.rect.height = 28
 
-        self.btn_recruit_cavalry = Button(
-            self.panel_x + 25,
-            recruit_y + (button_small_height + spacing) * 2,
-            button_small_width,
-            button_small_height,
-            f"Cavalerie ({UNIT_COSTS[UnitType.CAVALRY]} or)",
-            (230, 126, 34),
-            (243, 156, 18)
-        )
+        idle = ctx["idle"]
+        if not ctx["human"]:
+            self.btn_end_turn.text = "Tour de l'IA…"
+            self.btn_end_turn.color = WOOD
+        elif idle:
+            self.btn_end_turn.text = f"Unité suivante  ({idle})"
+            self.btn_end_turn.color = WOOD
+            self.btn_end_turn.hover_color = WOOD_LIGHT
+        else:
+            pulse = (pygame.time.get_ticks() // 420) % 2 == 0
+            self.btn_end_turn.text = "Fin de tour"
+            self.btn_end_turn.color = (140, 92, 28) if pulse else WOOD_LIGHT
+            self.btn_end_turn.hover_color = GOLD
 
-        # Bouton construction ville
-        self.btn_build_city = Button(
-            self.panel_x + 25,
-            recruit_y + (button_small_height + spacing) * 3,
-            button_small_width,
-            button_small_height,
-            f"Construire ville (150 or)",
-            (39, 174, 96),
-            (46, 204, 113)
-        )
+        buttons = []
+        if ctx["can_fortify"]:
+            buttons.append(self.btn_fortify)
+        if ctx["can_beach_land"]:
+            buttons.append(self.btn_disembark)
+        if ctx["can_recruit"]:
+            self.btn_recruit_swordsman.text = f"Spada  {player.unit_cost(UnitType.SWORDSMAN)}"
+            self.btn_recruit_spearman.text = f"Lancier  {player.unit_cost(UnitType.SPEARMAN)}"
+            self.btn_recruit_crossbowman.text = f"Arbalète  {player.unit_cost(UnitType.CROSSBOWMAN)}"
+            self.btn_recruit_cavalry.text = f"Caval.  {player.unit_cost(UnitType.CAVALRY)}"
+            self.btn_recruit_catapult.text = f"Catap.  {player.unit_cost(UnitType.CATAPULT)}"
+            buttons.extend(
+                [
+                    self.btn_recruit_swordsman,
+                    self.btn_recruit_spearman,
+                    self.btn_recruit_crossbowman,
+                    self.btn_recruit_cavalry,
+                    self.btn_recruit_catapult,
+                ]
+            )
+        if ctx["can_build_city"]:
+            self.btn_build_city.text = f"Fonder une ville  {CITY_COST}"
+            buttons.append(self.btn_build_city)
+        if ctx["can_build_bridge"]:
+            self.btn_build_bridge.text = f"Pont  {player.bridge_cost()}"
+            buttons.append(self.btn_build_bridge)
 
-        # Bouton construction pont
-        self.btn_build_bridge = Button(
-            self.panel_x + 25,
-            recruit_y + (button_small_height + spacing) * 4,
-            button_small_width,
-            button_small_height,
-            f"Construire pont ({BRIDGE_COST} or)",
-            (127, 101, 65),
-            (148, 122, 86)
-        )
+        extra = 38 if len(buttons) > 3 else 0
+        panel_h = 58 if not ctx["cell"] else 96 + extra
+        panel_w = min(620, WINDOW_WIDTH - 230)
+        self.context_rect = pygame.Rect(8, WINDOW_HEIGHT - panel_h - 8, panel_w, panel_h)
+        x = self.context_rect.x + 14
+        y = self.context_rect.bottom - 44
+        for button in buttons:
+            width = max(128, self.font_small.size(button.text)[0] + 20)
+            if x + width > self.context_rect.right - 8:
+                x = self.context_rect.x + 14
+                y -= 38
+            x = self._place(button, x, y, width)
+        return ctx, buttons
 
-        # Bouton déplacement
-        self.btn_move_army = Button(
-            self.panel_x + 25,
-            recruit_y + (button_small_height + spacing) * 5,
-            button_small_width,
-            button_small_height,
-            "Deplacer armee",
-            (52, 73, 94),
-            (71, 94, 121)
-        )
-
-        self.btn_ranged_attack = Button(
-            self.panel_x + 25,
-            recruit_y + (button_small_height + spacing) * 6,
-            button_small_width,
-            button_small_height,
-            "Tir a distance",
-            (120, 70, 170),
-            (140, 90, 190),
-        )
-
-        self.btn_fortify = Button(
-            self.panel_x + 25,
-            recruit_y + (button_small_height + spacing) * 7,
-            button_small_width,
-            button_small_height,
-            "Fortifier",
-            (80, 110, 90),
-            (96, 130, 108),
-        )
-        self.btn_research = Button(
-            self.panel_x + 25,
-            WINDOW_HEIGHT - 150,
-            button_small_width,
-            34,
-            "Rechercher tech",
-            (90, 110, 150),
-            (105, 130, 170),
-        )
-
-        self.current_tab = "actions"
-        tab_width = (UI_WIDTH - 60) // 3
-        self.btn_tab_actions = Button(self.panel_x + 20, 500, tab_width, 28, "Actions", (70, 80, 95), (90, 100, 115))
-        self.btn_tab_events = Button(self.panel_x + 25 + tab_width, 500, tab_width, 28, "Events", (70, 80, 95), (90, 100, 115))
-        self.btn_tab_stats = Button(self.panel_x + 30 + tab_width * 2, 500, tab_width, 28, "Stats", (70, 80, 95), (90, 100, 115))
+    def blocks_map(self, pos):
+        if pos[1] < HUD_TOP:
+            return True
+        if self.context_rect.width and self.context_rect.collidepoint(pos):
+            return True
+        if self.btn_end_turn.rect.collidepoint(pos):
+            return True
+        return False
 
     def draw(self, game):
-        # Fond du panneau
-        pygame.draw.rect(self.screen, UI_BG_COLOR, 
-                        (self.panel_x, self.panel_y, self.panel_width, self.panel_height))
-
-        # Ligne de séparation
-        pygame.draw.line(self.screen, (80, 80, 85), 
-                        (self.panel_x, 0), (self.panel_x, WINDOW_HEIGHT), 2)
-
-        y_offset = 20
-
-        # Top bar stratégique
-        bar_height = 36
-        pygame.draw.rect(self.screen, (28, 30, 35), (0, 0, GRID_COLS * CELL_SIZE, bar_height))
-        ui_country = game.get_ui_country()
-        active = game.current_player_country
-        if game.game_mode == "solo" and active != ui_country:
-            turn_label = f"{COUNTRY_NAMES[active]} (IA)"
-        else:
-            turn_label = COUNTRY_NAMES[active]
-        top_suffix = ""
-        if game.ai_turn_pending:
-            top_suffix = " | IA..."
-        elif game.pause_menu.open:
-            top_suffix = " | Pause"
-        top_text = self.font_small.render(
-            f"Tour {game.turn_number} | {turn_label} | Ton or {game.players[ui_country].gold} | Rev. {game.last_income} | Ent. {game.last_upkeep}{top_suffix}",
-            True,
-            (220, 220, 220),
-        )
-        self.screen.blit(top_text, (10, 10))
-
-        # Titre
-        title = self.font_title.render("The World Is Ours", True, UI_TITLE_COLOR)
-        self.screen.blit(title, (self.panel_x + 20, y_offset))
-        y_offset += 40
-
-        # Numéro de tour
-        turn_text = self.font_small.render(f"Tour: {game.turn_number}", True, (150, 150, 150))
-        self.screen.blit(turn_text, (self.panel_x + 20, y_offset))
-        y_offset += 40
-
-        if game.is_game_over():
-            if game.player_defeated:
-                end_text = game.game_over_message or "Defaite"
-            else:
-                end_text = f"Victoire: {COUNTRY_NAMES[game.winner_country]}"
-            winner_text = self.font_normal.render(end_text, True, (255, 215, 0))
-            self.screen.blit(winner_text, (self.panel_x + 20, y_offset))
-            y_offset += 40
-
-        ui_country = game.get_ui_country()
-        active_country = game.current_player_country
-        player = game.players[ui_country]
-
-        if game.game_mode == "solo" and active_country != ui_country:
-            self.draw_section_title("Tour en cours", y_offset)
-            y_offset += 30
-            ia_line = self.font_normal.render(
-                f"{COUNTRY_NAMES[active_country]} (IA)", True, UI_TEXT_COLOR
-            )
-            self.screen.blit(ia_line, (self.panel_x + 30, y_offset))
-            y_offset += 35
-            self.draw_section_title("Ton royaume", y_offset)
-            y_offset += 30
-        else:
-            self.draw_section_title("Pays actuel", y_offset)
-            y_offset += 30
-
-        country_name = COUNTRY_NAMES[ui_country]
-        pygame.draw.circle(self.screen, COUNTRY_COLORS[ui_country],
-                          (self.panel_x + 30, y_offset + 10), 8)
-        text = self.font_normal.render(country_name, True, UI_TEXT_COLOR)
-        self.screen.blit(text, (self.panel_x + 50, y_offset))
-        y_offset += 35
-
-        gold = player.gold
-        text = self.font_normal.render(f"Or: {gold}", True, (255, 215, 0))
-        self.screen.blit(text, (self.panel_x + 30, y_offset))
-        y_offset += 45
-
-        # Infos case sélectionnée
-        if game.selected_cell:
-            self.draw_section_title("Case sélectionnée", y_offset)
-            y_offset += 30
-
-            cell = game.selected_cell
-
-            # Position
-            text = self.font_small.render(f"Position: ({cell.x}, {cell.y})", True, UI_TEXT_COLOR)
-            self.screen.blit(text, (self.panel_x + 30, y_offset))
-            y_offset += 22
-
-            # Terrain
-            terrain_name = TERRAIN_FULL_NAMES[cell.terrain]
-            text = self.font_small.render(f"Terrain: {terrain_name}", True, UI_TEXT_COLOR)
-            self.screen.blit(text, (self.panel_x + 30, y_offset))
-            y_offset += 22
-
-            # Pays
-            if cell.country != Country.NONE:
-                country_name = COUNTRY_NAMES[cell.country]
-                pygame.draw.circle(self.screen, COUNTRY_COLORS[cell.country], 
-                                 (self.panel_x + 40, y_offset + 8), 6)
-                text = self.font_small.render(country_name, True, UI_TEXT_COLOR)
-                self.screen.blit(text, (self.panel_x + 55, y_offset))
-                y_offset += 22
-            else:
-                text = self.font_small.render("Pays: Neutre", True, UI_TEXT_COLOR)
-                self.screen.blit(text, (self.panel_x + 30, y_offset))
-                y_offset += 22
-
-            # Capitale
-            if cell.is_capital:
-                text = self.font_small.render("⭐ Capitale", True, (255, 215, 0))
-                self.screen.blit(text, (self.panel_x + 30, y_offset))
-                y_offset += 22
-
-            # Ville
-            if cell.is_city:
-                text = self.font_small.render("🏘 Ville", True, (100, 200, 100))
-                self.screen.blit(text, (self.panel_x + 30, y_offset))
-                y_offset += 22
-
-            # Armée
-            if cell.army:
-                y_offset += 5
-                army_name = UNIT_NAMES[cell.army.unit_type]
-                symbol = UNIT_SYMBOLS[cell.army.unit_type]
-                text = self.font_small.render(
-                    f"{symbol} {army_name} x{cell.army.count}/{MAX_UNITS_PER_ARMY}",
-                    True,
-                    (255, 255, 100),
-                )
-                self.screen.blit(text, (self.panel_x + 30, y_offset))
-                y_offset += 22
-
-                move_range = UNIT_MOVEMENT_RANGE.get(cell.army.unit_type, MOVEMENT_RANGE)
-                move_text = self.font_small.render(
-                    f"Portee: {move_range} | PM restant: {cell.army.movement_left}",
-                    True,
-                    UI_TEXT_COLOR,
-                )
-                self.screen.blit(move_text, (self.panel_x + 30, y_offset))
-                y_offset += 22
-                status = "Deja deplacee" if cell.army.movement_left <= 0 else "Prete"
-                status_text = self.font_small.render(f"Etat: {status}", True, UI_TEXT_COLOR)
-                self.screen.blit(status_text, (self.panel_x + 30, y_offset))
-                y_offset += 22
-                if cell.army.is_fortified:
-                    fort = self.font_small.render("Fortifiee (+def)", True, (180, 220, 180))
-                    self.screen.blit(fort, (self.panel_x + 30, y_offset))
-                    y_offset += 22
-
-            y_offset += 20
-
-        # Tabs
-        self.btn_tab_actions.draw(self.screen, self.font_small)
-        self.btn_tab_events.draw(self.screen, self.font_small)
-        self.btn_tab_stats.draw(self.screen, self.font_small)
-        recruit_y = 560
-        self.draw_section_title(self.current_tab.capitalize(), recruit_y - 36)
-        recruit_y += 10
-
-        # Affiche les boutons selon contexte de la case sélectionnée
-        if self.current_tab == "actions" and game.selected_cell:
-            human_turn = game.is_human_turn()
-            can_recruit = (
-                human_turn
-                and game.selected_cell.country == ui_country
-                and (game.selected_cell.is_city or game.selected_cell.is_capital)
-                and game.selected_cell.terrain not in (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
-            )
-            can_build_city = (
-                human_turn
-                and game.selected_cell.country == ui_country
-                and not game.selected_cell.is_city
-                and not game.selected_cell.is_capital
-                and game.selected_cell.terrain not in (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
-                and not game.selected_cell.army
-            )
-            can_build_bridge = (
-                human_turn
-                and game.selected_cell.country == ui_country
-                and game.selected_cell.terrain != TerrainType.WATER
-            )
-            can_move = (
-                human_turn
-                and game.selected_cell.army
-                and game.selected_cell.army.country == ui_country
-            )
-
-            if can_recruit:
-                self.btn_recruit_swordsman.draw(self.screen, self.font_small)
-                self.btn_recruit_crossbowman.draw(self.screen, self.font_small)
-                self.btn_recruit_cavalry.draw(self.screen, self.font_small)
-            if can_build_city:
-                self.btn_build_city.draw(self.screen, self.font_small)
-            if can_build_bridge:
-                self.btn_build_bridge.draw(self.screen, self.font_small)
-                if game.bridge_mode:
-                    bridge_msg = self.font_small.render("Mode pont actif: clique eau", True, (230, 200, 140))
-                    self.screen.blit(bridge_msg, (self.panel_x + 28, recruit_y + 246))
-
-            if not (can_recruit or can_build_city or can_build_bridge or can_move):
-                msg = self.font_small.render("Aucune action disponible ici", True, (150, 150, 150))
-                self.screen.blit(msg, (self.panel_x + 28, recruit_y + 22))
-
-            if can_move:
-                self.btn_move_army.draw(self.screen, self.font_small)
-                self.btn_fortify.draw(self.screen, self.font_small)
-                if game.selected_cell.army.unit_type == UnitType.CROSSBOWMAN:
-                    self.btn_ranged_attack.draw(self.screen, self.font_small)
-                if game.selected_cell.army.movement_left <= 0:
-                    moved_msg = self.font_small.render("Cette armee a deja bouge", True, (220, 120, 120))
-                    self.screen.blit(moved_msg, (self.panel_x + 30, recruit_y + 240))
-        elif self.current_tab == "actions":
-            # Message si pas de case sélectionnée
-            msg = self.font_small.render("Sélectionnez une", True, (150, 150, 150))
-            msg2 = self.font_small.render("case pour recruter", True, (150, 150, 150))
-            self.screen.blit(msg, (self.panel_x + 60, recruit_y + 30))
-            self.screen.blit(msg2, (self.panel_x + 50, recruit_y + 50))
-        elif self.current_tab == "events":
-            y = recruit_y
-            for msg in game.event_log[-10:]:
-                clipped = msg[:44]
-                line = self.font_small.render(clipped, True, (190, 190, 190))
-                self.screen.blit(line, (self.panel_x + 24, y))
-                y += 20
-        else:
-            y = recruit_y
-            territories = self.count_territories(game)
-            for country, count in territories.items():
-                if country == Country.NONE or count <= 0:
-                    continue
-                pygame.draw.circle(self.screen, COUNTRY_COLORS[country], (self.panel_x + 30, y + 8), 6)
-                text = self.font_small.render(f"{COUNTRY_NAMES[country]}: {count} cases", True, UI_TEXT_COLOR)
-                self.screen.blit(text, (self.panel_x + 45, y))
-                y += 20
-            y += 10
-            player = game.players[game.get_ui_country()]
-            tech_title = self.font_small.render("Techs:", True, (190, 210, 230))
-            self.screen.blit(tech_title, (self.panel_x + 24, y))
-            y += 20
-            if player.unlocked_techs:
-                for tech in TECH_TREE:
-                    if tech["id"] not in player.unlocked_techs:
-                        continue
-                    line = self.font_small.render(f"- {tech['name']}", True, (170, 220, 170))
-                    self.screen.blit(line, (self.panel_x + 30, y))
-                    y += 18
-            else:
-                line = self.font_small.render("- Aucune", True, (150, 150, 150))
-                self.screen.blit(line, (self.panel_x + 30, y))
-
-        # Bouton fin de tour
-        self.btn_research.draw(self.screen, self.font_small)
-        next_tech = game.players[game.get_ui_country()].get_next_tech()
-        if next_tech:
-            line = self.font_small.render(
-                f"Tech: {next_tech['name']} ({next_tech['cost']} or)",
-                True,
-                (170, 190, 220),
-            )
-        else:
-            line = self.font_small.render("Tech tree complete", True, (170, 220, 170))
-        self.screen.blit(line, (self.panel_x + 28, WINDOW_HEIGHT - 112))
-
+        ctx, buttons = self.layout(game)
+        self._draw_city_banners(game)
+        self._draw_top_bar(game, ctx)
+        self._draw_event_log(game)
+        self._draw_context_panel(game, ctx, buttons)
         self.btn_end_turn.draw(self.screen, self.font_normal)
-    
-    def handle_event(self, event, game):
-        """Gère les événements UI"""
-        if self.btn_end_turn.handle_event(event):
-            return "end_turn"
-        if self.btn_research.handle_event(event):
-            return "research_next"
-        if self.btn_tab_actions.handle_event(event):
-            self.current_tab = "actions"
-            return None
-        if self.btn_tab_events.handle_event(event):
-            self.current_tab = "events"
-            return None
-        if self.btn_tab_stats.handle_event(event):
-            self.current_tab = "stats"
-            return None
 
-        selected_cell = game.selected_cell
-        current_country = game.get_ui_country()
-        can_recruit = (
-            selected_cell
-            and selected_cell.country == current_country
-            and game.is_human_turn()
-            and (selected_cell.is_city or selected_cell.is_capital)
-            and selected_cell.terrain not in (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
+    def _draw_top_bar(self, game, ctx):
+        bar = pygame.Rect(0, 0, WINDOW_WIDTH, HUD_TOP)
+        draw_bevel_rect(self.screen, bar, WOOD, GOLD_BRIGHT, WOOD_DARK, 2)
+        pygame.draw.line(self.screen, GOLD, (0, HUD_TOP - 2), (WINDOW_WIDTH, HUD_TOP - 2), 2)
+        country = ctx["country"]
+        player = ctx["player"]
+        pygame.draw.circle(self.screen, COUNTRY_COLORS[country], (18, 22), 9)
+        pygame.draw.circle(self.screen, GOLD, (18, 22), 9, 1)
+        self.screen.blit(self.font_normal.render(COUNTRY_SHORT[country], True, CREAM), (32, 6))
+        trait = player.trait_info()
+        if trait:
+            self.screen.blit(self.font_tiny.render(trait["name"], True, GOLD_BRIGHT), (32, 30))
+
+        gold = self.font_title.render(str(player.gold), True, GOLD_BRIGHT)
+        self.screen.blit(gold, (200, 4))
+        self.screen.blit(self.font_tiny.render("or", True, GOLD), (200 + gold.get_width() + 6, 10))
+        self.screen.blit(
+            self.font_tiny.render(f"+{game.last_income}  -{game.last_upkeep}", True, PARCHMENT),
+            (200, 32),
         )
-        can_build_city = (
-            selected_cell
-            and selected_cell.country == current_country
-            and not selected_cell.is_city
-            and not selected_cell.is_capital
-            and selected_cell.terrain not in (TerrainType.WATER, TerrainType.BEACH, TerrainType.BRIDGE)
-            and not selected_cell.army
-        )
-        can_build_bridge = (
-            selected_cell
-            and selected_cell.country == current_country
-            and selected_cell.terrain != TerrainType.WATER
-        )
-        can_move = selected_cell and selected_cell.army and selected_cell.army.country == current_country
 
-        # Construction ville
-        if can_build_city and self.btn_build_city.handle_event(event):
-            return "build_city"
-        if can_build_bridge and self.btn_build_bridge.handle_event(event):
-            return "build_bridge"
-        
-        # Déplacement
-        if can_move and self.btn_move_army.handle_event(event):
-            return "move_army"
-        if can_move and self.btn_fortify.handle_event(event):
-            return "fortify"
-        if (
-            can_move
-            and selected_cell.army.unit_type == UnitType.CROSSBOWMAN
-            and self.btn_ranged_attack.handle_event(event)
-        ):
-            return "ranged_attack_mode"
+        active = game.current_player_country
+        status = f"Tour {game.turn_number}"
+        if game.game_mode == "solo" and active != country:
+            status += "  (IA)"
+        self.screen.blit(self.font_small.render(status, True, CREAM), (400, 8))
+        self.screen.blit(self.font_tiny.render("N unité suivante    Espace fin de tour    Échap pause", True, PARCHMENT), (400, 30))
+        self.btn_research.draw(self.screen, self.font_tiny)
 
-        # Recrutement
-        if can_recruit and self.btn_recruit_swordsman.handle_event(event):
-            return ("recruit", UnitType.SWORDSMAN)
-        if can_recruit and self.btn_recruit_crossbowman.handle_event(event):
-            return ("recruit", UnitType.CROSSBOWMAN)
-        if can_recruit and self.btn_recruit_cavalry.handle_event(event):
-            return ("recruit", UnitType.CAVALRY)
-        
-        return None
-
-    def draw_section_title(self, title, y):
-        text = self.font_normal.render(title, True, UI_TITLE_COLOR)
-        self.screen.blit(text, (self.panel_x + 20, y))
-        # Ligne sous le titre
-        pygame.draw.line(self.screen, (80, 80, 85), 
-                        (self.panel_x + 20, y + 25), 
-                        (self.panel_x + UI_WIDTH - 20, y + 25), 1)
-    
-    def count_territories(self, game):
-        counts = {country: 0 for country in Country}
+    def _draw_city_banners(self, game):
+        viewer = game.get_viewer_country()
         for x in range(GRID_COLS):
             for y in range(GRID_ROWS):
                 cell = game.grid[x][y]
-                if cell.country != Country.NONE:
-                    counts[cell.country] += 1
-        return counts
+                if not (cell.is_capital or cell.is_city):
+                    continue
+                if (x, y) not in game.visibility and viewer not in cell.discovered_by:
+                    continue
+                sx, sy = cell_screen_pos(x, y)
+                name = COUNTRY_SHORT.get(cell.country, "?")
+                label = name
+                surf = self.font_tiny.render(label, True, CREAM)
+                pos = (sx + (CELL_SIZE - surf.get_width()) // 2, sy - 16)
+                if pos[1] < HUD_TOP:
+                    pos = (pos[0], sy + CELL_SIZE + 1)
+                blit_outlined(self.screen, self.font_tiny, label, CREAM, (20, 12, 8), pos)
+
+    def _draw_event_log(self, game):
+        y = HUD_TOP + 6
+        for msg in game.event_log[-3:]:
+            blit_outlined(self.screen, self.font_tiny, msg[:60], CREAM, (20, 12, 8), (10, y))
+            y += 18
+
+    def _draw_context_panel(self, game, ctx, buttons):
+        draw_bevel_rect(self.screen, self.context_rect, WOOD, GOLD_BRIGHT, WOOD_DARK, 2)
+        inner = self.context_rect.inflate(-6, -6)
+        pygame.draw.rect(self.screen, PARCHMENT, inner)
+        pygame.draw.rect(self.screen, GOLD, inner, 1)
+        x = self.context_rect.x + 14
+        y = self.context_rect.y + 8
+        cell = ctx["cell"]
+        if ctx["army"]:
+            army = ctx["army"]
+            ship = " en mer" if army.embarked else ""
+            title = f"{UNIT_NAMES[army.unit_type]}{ship}  x{army.count}"
+            self.screen.blit(self.font_normal.render(title, True, INK), (x, y))
+            pm = f"mouvement {army.movement_left}/{army.movement_range(game.players.get(army.country))}"
+            self.screen.blit(self.font_small.render(pm, True, INK_SOFT), (x + 268, y + 2))
+        elif cell and (cell.is_capital or cell.is_city):
+            kind = "Capitale" if cell.is_capital else "Ville"
+            self.screen.blit(self.font_normal.render(kind, True, INK), (x, y))
+        elif cell:
+            self.screen.blit(
+                self.font_normal.render(TERRAIN_FULL_NAMES[cell.terrain], True, INK),
+                (x, y),
+            )
+        else:
+            self.screen.blit(self.font_normal.render("Aucune sélection", True, INK_SOFT), (x, y))
+        self.screen.blit(self.font_tiny.render(ctx["hint"], True, INK_SOFT), (x, y + 26))
+        if ctx["already_recruited"] and not ctx["can_recruit"]:
+            self.screen.blit(
+                self.font_tiny.render("Production déjà utilisée", True, (140, 48, 36)),
+                (x, y + 44),
+            )
+        for button in buttons:
+            button.draw(self.screen, self.font_small)
+
+    def handle_event(self, event, game):
+        ctx, buttons = self.layout(game)
+        if self.btn_end_turn.handle_event(event):
+            if ctx["human"] and ctx["idle"]:
+                return "next_unit"
+            return "end_turn"
+        if ctx["human"] and self.btn_research.handle_event(event):
+            return "research_next"
+        if ctx["can_fortify"] and self.btn_fortify.handle_event(event):
+            return "fortify"
+        if ctx["can_beach_land"] and self.btn_disembark.handle_event(event):
+            return "disembark_mode"
+        if ctx["can_build_city"] and self.btn_build_city.handle_event(event):
+            return "build_city"
+        if ctx["can_build_bridge"] and self.btn_build_bridge.handle_event(event):
+            return "build_bridge"
+        if ctx["can_recruit"]:
+            if self.btn_recruit_swordsman.handle_event(event):
+                return ("recruit", UnitType.SWORDSMAN)
+            if self.btn_recruit_spearman.handle_event(event):
+                return ("recruit", UnitType.SPEARMAN)
+            if self.btn_recruit_crossbowman.handle_event(event):
+                return ("recruit", UnitType.CROSSBOWMAN)
+            if self.btn_recruit_cavalry.handle_event(event):
+                return ("recruit", UnitType.CAVALRY)
+            if self.btn_recruit_catapult.handle_event(event):
+                return ("recruit", UnitType.CATAPULT)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.blocks_map(event.pos):
+            return "hud_click"
+        return None

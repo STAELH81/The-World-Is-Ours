@@ -28,6 +28,7 @@ class AI:
         self._try_build_city(country, player)
         self._recruit_units(country, player)
         self._move_armies(country)
+        self._try_build_bridge(country, player)
 
         print(f"[AI] {COUNTRY_NAMES[country]} termine son tour")
 
@@ -36,7 +37,7 @@ class AI:
         if tech and player.gold >= tech["cost"] + 80:
             result = player.research_next()
             if result:
-                self.game.log_event(f"[TECH] {COUNTRY_NAMES[country]} debloque {result['name']}")
+                self.game.log_event(f"{COUNTRY_NAMES[country]} débloque {result['name']}")
 
     def _try_build_city(self, country, player):
         if player.gold < CITY_COST + 60:
@@ -103,7 +104,7 @@ class AI:
             if unit_type is None:
                 continue
 
-            cost = UNIT_COSTS[unit_type]
+            cost = player.unit_cost(unit_type)
             if player.gold < cost:
                 continue
             player.spend_gold(cost)
@@ -112,6 +113,7 @@ class AI:
                 capital_cell.army.count += 1
             else:
                 capital_cell.army = Army(country, unit_type, 1)
+                capital_cell.army.refresh_movement(player)
             capital_cell.last_recruit_turn = self.game.turn_number
             recruited += 1
 
@@ -121,13 +123,27 @@ class AI:
                 return None
             return cell.army.unit_type
 
-        if player.gold >= UNIT_COSTS[UnitType.CAVALRY]:
+        if self._needs_siege(country) and player.gold >= player.unit_cost(UnitType.CATAPULT):
+            if random.random() < 0.5:
+                return UnitType.CATAPULT
+        if player.gold >= player.unit_cost(UnitType.CAVALRY):
             return UnitType.CAVALRY
-        if player.gold >= UNIT_COSTS[UnitType.CROSSBOWMAN]:
+        if player.gold >= player.unit_cost(UnitType.CROSSBOWMAN):
             return UnitType.CROSSBOWMAN
-        if player.gold >= UNIT_COSTS[UnitType.SWORDSMAN]:
+        if player.gold >= player.unit_cost(UnitType.SPEARMAN):
+            return UnitType.SPEARMAN
+        if player.gold >= player.unit_cost(UnitType.SWORDSMAN):
             return UnitType.SWORDSMAN
         return None
+
+    def _needs_siege(self, country):
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = self.game.grid[x][y]
+                if (cell.is_city or cell.is_capital) and cell.country not in (country, Country.NONE):
+                    if self.is_target_allowed(country, cell.country):
+                        return True
+        return False
 
     def _move_armies(self, country):
         armies = []
@@ -136,36 +152,185 @@ class AI:
                 cell = self.game.grid[x][y]
                 if cell.army and cell.army.country == country:
                     armies.append(cell)
-
         armies.sort(key=lambda c: self._army_priority(c, country), reverse=True)
-
         for army_cell in armies:
             if not army_cell.army:
                 continue
             step_guard = 0
             while army_cell.army and army_cell.army.movement_left > 0 and step_guard < 4:
                 step_guard += 1
-                if army_cell.army.unit_type == UnitType.CROSSBOWMAN:
+                army = army_cell.army
+                if army.unit_type in UNIT_RANGED_RANGE:
                     target = self._best_ranged_target(army_cell, country)
                     if target:
                         self.game.ranged_attack(army_cell, target)
                         continue
-
+                if army.embarked:
+                    landing = self._best_disembark_target(army_cell, country)
+                    if landing:
+                        self.game.disembark_army(army_cell, landing)
+                        army_cell = self._follow(army_cell, landing, country)
+                        continue
+                    sail = self._best_sail_target(army_cell, country)
+                    if sail:
+                        self.game.move_army(army_cell, sail)
+                        army_cell = self._follow(army_cell, sail, country)
+                        continue
+                    break
                 recapture = self._best_recapture_target(army_cell, country)
                 if recapture:
                     self.game.move_army(army_cell, recapture)
+                    army_cell = self._follow(army_cell, recapture, country)
                     continue
-
                 enemy = self._best_attack_target(army_cell, country)
                 if enemy:
                     self.game.move_army(army_cell, enemy)
+                    army_cell = self._follow(army_cell, enemy, country)
                     continue
-
+                if not self._can_reach_objective_by_land(army_cell, country):
+                    embark_cell = self._best_embark_tile(army_cell)
+                    player = self.game.players[country]
+                    if embark_cell and player.gold >= player.embark_cost():
+                        self.game.embark_army(army_cell, embark_cell)
+                        army_cell = self._follow(army_cell, embark_cell, country)
+                        continue
                 move_to = self._best_move_toward_objective(army_cell, country)
                 if move_to:
                     self.game.move_army(army_cell, move_to)
+                    army_cell = self._follow(army_cell, move_to, country)
                 else:
                     break
+
+    def _follow(self, old_cell, dest, country):
+        if dest.army and dest.army.country == country:
+            return dest
+        if old_cell.army and old_cell.army.country == country:
+            return old_cell
+        return dest
+
+    def _can_reach_objective_by_land(self, from_cell, country):
+        objective = self._nearest_enemy_capital(from_cell, country)
+        if not objective or not from_cell.army:
+            return True
+        was_embarked = from_cell.army.embarked
+        from_cell.army.embarked = False
+        path = self.game.find_path(from_cell, objective, PATH_SEARCH_LIMIT, from_cell.army)
+        from_cell.army.embarked = was_embarked
+        return bool(path)
+
+    def _best_embark_tile(self, from_cell):
+        targets = self.game.get_embark_targets(from_cell)
+        if not targets:
+            return None
+        objective = self._nearest_enemy_capital(from_cell, from_cell.army.country)
+        best = None
+        best_score = 999
+        for x, y in targets:
+            cell = self.game.grid[x][y]
+            dist = abs(x - from_cell.x) + abs(y - from_cell.y)
+            if objective:
+                dist += abs(x - objective.x) + abs(y - objective.y)
+            if dist < best_score:
+                best_score = dist
+                best = cell
+        return best
+
+    def _best_disembark_target(self, from_cell, country):
+        targets = self.game.get_disembark_targets(from_cell)
+        if not targets:
+            return None
+        # Prefer stepping off the current beach in place.
+        if (from_cell.x, from_cell.y) in targets:
+            return from_cell
+        objective = self._nearest_enemy_capital(from_cell, country)
+        best = None
+        best_score = -9999
+        for x, y in targets:
+            cell = self.game.grid[x][y]
+            score = 50
+            if cell.army and cell.army.country != country:
+                score += 40
+            if cell.is_capital:
+                score += 80
+            if cell.is_city:
+                score += 30
+            if objective:
+                score -= abs(x - objective.x) + abs(y - objective.y)
+            if score > best_score:
+                best_score = score
+                best = cell
+        return best
+
+    def _best_sail_target(self, from_cell, country):
+        objective = self._nearest_enemy_capital(from_cell, country)
+        if not objective or not from_cell.army:
+            return None
+        movement_range = from_cell.army.movement_left
+        best = None
+        best_dist = abs(from_cell.x - objective.x) + abs(from_cell.y - objective.y)
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                target = self.game.grid[x][y]
+                path = self.game.find_path(from_cell, target, movement_range, from_cell.army)
+                if not path:
+                    continue
+                dist = abs(x - objective.x) + abs(y - objective.y)
+                shore = 8 if any(n.terrain in LAND_TERRAINS or n.terrain == TerrainType.BEACH for n in self.game._neighbors(target)) else 0
+                score_dist = dist - shore
+                if score_dist < best_dist:
+                    best_dist = score_dist
+                    best = target
+        return best
+
+    def _has_land_path_to_enemy_capital(self, country):
+        """True if a land army can walk to any enemy capital (bridges count as land)."""
+        starts = []
+        enemy_caps = []
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = self.game.grid[x][y]
+                if cell.is_capital and cell.capital_owner == country:
+                    starts.append(cell)
+                elif cell.army and cell.army.country == country and not cell.army.embarked:
+                    starts.append(cell)
+                if cell.is_capital and cell.country not in (country, Country.NONE):
+                    enemy_caps.append(cell)
+        if not starts or not enemy_caps:
+            return True
+        dummy = Army(country, UnitType.SWORDSMAN, 1)
+        dummy.embarked = False
+        for start in starts:
+            for cap in enemy_caps:
+                if self.game.find_path(start, cap, PATH_SEARCH_LIMIT, dummy):
+                    return True
+        return False
+
+    def _try_build_bridge(self, country, player):
+        if player.gold < player.bridge_cost() + 120:
+            return
+        if self._has_land_path_to_enemy_capital(country):
+            return
+        self.game.compute_bridge_targets()
+        if not self.game.bridge_targets:
+            return
+        objective = None
+        for x in range(GRID_COLS):
+            for y in range(GRID_ROWS):
+                cell = self.game.grid[x][y]
+                if cell.is_capital and cell.country not in (country, Country.NONE) and self.is_target_allowed(country, cell.country):
+                    objective = cell
+                    break
+            if objective:
+                break
+        best = None
+        best_dist = 999
+        for x, y in self.game.bridge_targets:
+            dist = 0 if not objective else abs(x - objective.x) + abs(y - objective.y)
+            if dist < best_dist:
+                best_dist = dist
+                best = self.game.grid[x][y]
+        if best:
+            self.game.build_bridge_on_cell(best)
 
     def _army_priority(self, army_cell, country):
         score = 0
@@ -225,7 +390,7 @@ class AI:
                 path = self.game.find_path(from_cell, cell, movement_range, from_cell.army)
                 if not path:
                     continue
-                distance = len(path)
+                distance = self.game.path_move_cost(path, from_cell.army)
                 if distance < best_distance:
                     best_distance = distance
                     best = cell
@@ -244,7 +409,9 @@ class AI:
                 path = self.game.find_path(from_cell, cell, movement_range, from_cell.army)
                 if not path:
                     continue
-                score = self._target_score(from_cell, cell, country, len(path))
+                score = self._target_score(
+                    from_cell, cell, country, self.game.path_move_cost(path, from_cell.army)
+                )
                 if score > best_score:
                     best_score = score
                     best = cell

@@ -4,4 +4,4 @@ __pycache__/
 saves/
 .venv/
 venv/
-.env
+Thumbs.db

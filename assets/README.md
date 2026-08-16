@@ -13,16 +13,16 @@ assets/
   terrain/terrain_water.png
   terrain/terrain_beach.png
   terrain/terrain_bridge.png
-  overlay/border_red.png
-  overlay/border_blue.png
-  overlay/border_green.png
-  overlay/border_yellow.png
-  overlay/border_orange.png
   units/unit_swordsman.png
   units/unit_crossbowman.png
   units/unit_cavalry.png
+  units/unit_spearman.png
+  units/unit_catapult.png
+  units/unit_ship.png
   buildings/capital.png
   buildings/city.png
 ```
+
+Les `overlay/border_*.png` ne sont plus tamponnés case par case. Grille légère à l’intérieur du royaume, contour fort entre royaumes.
 
 Taille recommandée : **34×34** pour le terrain, plus petit pour unités/bâtiments (voir `asset_loader.py`).

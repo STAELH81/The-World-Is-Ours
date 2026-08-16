@@ -1,5 +1,21 @@
 import pygame
 from constants import *
+from theme import GOLD
+from tiles import draw_army_badge, draw_city, terrain_surface
+
+
+def draw_unit_icon(surface, cx, cy, unit_type, embarked=False):
+    from tiles import _figure, _ship
+
+    if embarked:
+        _ship(surface, cx, cy)
+        return
+    _figure(surface, cx, cy, unit_type, COUNTRY_COLORS[Country.RED])
+
+
+def draw_army_at(surface, screen_x, screen_y, army, assets=None):
+    draw_army_badge(surface, screen_x, screen_y, army, assets)
+
 
 class Cell:
     def __init__(self, x, y):
@@ -9,93 +25,115 @@ class Cell:
         self.country = Country.NONE
         self.is_selected = False
         self.is_capital = False
-        self.is_city = False  # NOUVEAU
+        self.is_city = False
         self.army = None
         self.bridge_hp = 0
         self.discovered_by = set()
         self.capital_owner = Country.NONE
         self.city_owner = Country.NONE
         self.last_recruit_turn = -1
-        
-    def draw(self, surface, assets=None, show_units=True):
-        screen_x = self.x * CELL_SIZE
-        screen_y = self.y * CELL_SIZE
-        
-        color = TERRAIN_COLORS[self.terrain]
-        terrain_sprite = assets.terrain.get(self.terrain) if assets else None
-        
-        if self.is_selected:
-            color = tuple(min(255, c + 60) for c in color)
+        self.garrison_ready = True
 
-        if terrain_sprite:
-            surface.blit(terrain_sprite, (screen_x, screen_y))
-            if self.is_selected:
-                # Keep selection readable above the terrain sprite.
-                selection_overlay = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                selection_overlay.fill((255, 255, 255, 45))
-                surface.blit(selection_overlay, (screen_x, screen_y))
-        else:
-            pygame.draw.rect(surface, color, (screen_x, screen_y, CELL_SIZE, CELL_SIZE))
-            shade = tuple(max(0, c - 28) for c in color)
-            pygame.draw.rect(surface, shade, (screen_x, screen_y + CELL_SIZE // 2, CELL_SIZE, CELL_SIZE // 2))
-            pygame.draw.rect(surface, (20, 20, 20), (screen_x, screen_y, CELL_SIZE, CELL_SIZE), 1)
-        
+    def draw(self, surface, assets=None, show_units=True, tick=0, grid=None):
+        screen_x, screen_y = cell_screen_pos(self.x, self.y)
+        variant = (self.x * 3 + self.y * 5) % 4
+        if self.terrain == TerrainType.WATER:
+            variant = (variant + (tick // 480)) % 4
+        surface.blit(terrain_surface(self.terrain, variant), (screen_x, screen_y))
+
+        if assets:
+            sprite = assets.terrain.get(self.terrain)
+            if sprite:
+                surface.blit(sprite, (screen_x, screen_y))
+
+        tile = pygame.Rect(screen_x, screen_y, CELL_SIZE, CELL_SIZE)
         if self.country != Country.NONE:
-            border_overlay = assets.overlays.get(self.country) if assets else None
-            if border_overlay:
-                surface.blit(border_overlay, (screen_x, screen_y))
-            else:
-                border_color = COUNTRY_COLORS[self.country]
-                pygame.draw.rect(surface, border_color, 
-                               (screen_x, screen_y, CELL_SIZE, CELL_SIZE), 3)
-        
-        # Capitale / ville (l'armée est dessinée par-dessus)
-        if self.is_capital:
-            center_x = screen_x + CELL_SIZE // 2
-            center_y = screen_y + CELL_SIZE // 2
-            capital_sprite = assets.buildings.get("capital") if assets else None
-            if capital_sprite:
-                sprite_rect = capital_sprite.get_rect(center=(center_x, center_y))
-                surface.blit(capital_sprite, sprite_rect)
-            else:
-                pygame.draw.circle(surface, COUNTRY_COLORS[self.country], (center_x, center_y), 10)
-                pygame.draw.circle(surface, (0, 0, 0), (center_x, center_y), 7)
-        elif self.is_city:
-            center_x = screen_x + CELL_SIZE // 2
-            center_y = screen_y + CELL_SIZE // 2
-            city_sprite = assets.buildings.get("city") if assets else None
-            if city_sprite:
-                sprite_rect = city_sprite.get_rect(center=(center_x, center_y))
-                surface.blit(city_sprite, sprite_rect)
-            else:
-                pygame.draw.rect(surface, COUNTRY_COLORS[self.country],
-                                (center_x - 8, center_y - 8, 16, 16))
-                pygame.draw.rect(surface, (0, 0, 0),
-                                (center_x - 6, center_y - 6, 12, 12))
+            wash = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+            wash.fill((*COUNTRY_COLORS[self.country], 28))
+            surface.blit(wash, (screen_x, screen_y))
+            self._draw_political_borders(surface, screen_x, screen_y, grid)
+
+        if self.terrain == TerrainType.WATER and grid is not None:
+            self._draw_coast_foam(surface, screen_x, screen_y, grid)
+
+        if self.is_capital or self.is_city:
+            draw_city(
+                surface,
+                self,
+                screen_x,
+                screen_y,
+                compact=bool(self.army and show_units),
+                assets=assets,
+            )
 
         if show_units and self.army:
-            self.draw_army(surface, screen_x, screen_y, assets)
-    
-    def draw_army(self, surface, screen_x, screen_y, assets=None):
-        """Dessine l'armée sur la case"""
-        # Fond semi-transparent
-        army_bg = pygame.Surface((CELL_SIZE - 6, CELL_SIZE - 6), pygame.SRCALPHA)
-        army_bg.fill((*COUNTRY_COLORS[self.army.country], 180))
-        surface.blit(army_bg, (screen_x + 3, screen_y + 3))
+            draw_army_badge(surface, screen_x, screen_y, self.army, assets)
 
-        # Sprite unité (fallback emoji si absent)
-        unit_sprite = assets.units.get(self.army.unit_type) if assets else None
-        if unit_sprite:
-            sprite_rect = unit_sprite.get_rect(center=(screen_x + CELL_SIZE // 2, screen_y + 12))
-            surface.blit(unit_sprite, sprite_rect)
-        else:
-            font_symbol = pygame.font.Font(None, 20)
-            symbol = font_symbol.render(UNIT_SYMBOLS[self.army.unit_type], True, (255, 255, 255))
-            symbol_rect = symbol.get_rect(center=(screen_x + CELL_SIZE // 2, screen_y + 10))
-            surface.blit(symbol, symbol_rect)
-        
-        # Nombre d'unités
-        font_count = pygame.font.Font(None, 18)
-        count_text = font_count.render(f"x{self.army.count}", True, (255, 255, 255))
-        count_rect = count_text.get_rect(center=(screen_x + CELL_SIZE // 2, screen_y + CELL_SIZE - 8))
-        surface.blit(count_text, count_rect)
+        if self.is_selected:
+            pygame.draw.rect(surface, GOLD, tile.inflate(-2, -2), 2)
+
+    def _neighbor(self, grid, dx, dy):
+        nx, ny = self.x + dx, self.y + dy
+        if grid is None or not (0 <= nx < GRID_COLS and 0 <= ny < GRID_ROWS):
+            return None
+        return grid[nx][ny]
+
+    def territory_edge_kind(self, neighbor):
+        """same = interior, outer = blob outline, frontier = other kingdom."""
+        if neighbor is None:
+            return "outer"
+        if neighbor.country == self.country:
+            return "same"
+        if neighbor.country != Country.NONE:
+            return "frontier"
+        return "outer"
+
+    def political_edges(self, grid):
+        return {
+            "n": self.territory_edge_kind(self._neighbor(grid, 0, -1)),
+            "s": self.territory_edge_kind(self._neighbor(grid, 0, 1)),
+            "w": self.territory_edge_kind(self._neighbor(grid, -1, 0)),
+            "e": self.territory_edge_kind(self._neighbor(grid, 1, 0)),
+        }
+
+    def _edge_rect(self, name, thickness, inset=0):
+        s = CELL_SIZE
+        if name == "n":
+            return pygame.Rect(inset, inset, s - 2 * inset, thickness)
+        if name == "s":
+            return pygame.Rect(inset, s - thickness - inset, s - 2 * inset, thickness)
+        if name == "w":
+            return pygame.Rect(inset, inset, thickness, s - 2 * inset)
+        return pygame.Rect(s - thickness - inset, inset, thickness, s - 2 * inset)
+
+    def _draw_political_borders(self, surface, screen_x, screen_y, grid):
+        """Strong outline between kingdoms; faint grid between tiles inside a kingdom."""
+        color = COUNTRY_COLORS[self.country]
+        layer = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+        kinds = self.political_edges(grid)
+
+        for name, kind in kinds.items():
+            if kind == "same":
+                # One side only so the shared edge stays a single hairline.
+                if name in ("e", "s"):
+                    pygame.draw.rect(layer, (28, 20, 12, 48), self._edge_rect(name, 1))
+                continue
+            pygame.draw.rect(layer, (*color, 70), self._edge_rect(name, 6))
+            pygame.draw.rect(layer, (18, 12, 8, 200), self._edge_rect(name, 2))
+            pygame.draw.rect(layer, (*color, 230), self._edge_rect(name, 2, inset=1))
+
+        surface.blit(layer, (screen_x, screen_y))
+
+    def _draw_coast_foam(self, surface, screen_x, screen_y, grid):
+        foam = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+        edges = (
+            (0, -1, "n"),
+            (0, 1, "s"),
+            (-1, 0, "w"),
+            (1, 0, "e"),
+        )
+        for dx, dy, name in edges:
+            neighbor = self._neighbor(grid, dx, dy)
+            if neighbor and neighbor.terrain in SHORE_TERRAINS:
+                pygame.draw.rect(foam, (200, 220, 224, 90), self._edge_rect(name, 2, inset=1))
+        surface.blit(foam, (screen_x, screen_y))
