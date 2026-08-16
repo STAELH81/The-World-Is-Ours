@@ -162,12 +162,13 @@ class AssetLoader:
             UnitType.SPEARMAN: self._pick(
                 [
                     "units/unit_spearman.png",
+                    "units/unit_lancier.png",
                     "units/spearman.png",
                     "units/lancier.png",
                     "spearman.png",
                     "lancier.png",
                 ],
-                ("spearman", "lancier", "pique", "pike"),
+                ("spearman", "lancier", "lancer", "pique", "pike"),
                 unit,
             ),
             UnitType.CAVALRY: self._pick(
@@ -184,12 +185,13 @@ class AssetLoader:
             UnitType.CATAPULT: self._pick(
                 [
                     "units/unit_catapult.png",
+                    "units/unit_catapulte.png",
                     "units/catapult.png",
                     "units/catapulte.png",
                     "catapult.png",
                     "catapulte.png",
                 ],
-                ("catapult", "catapulte", "siege", "trebuchet"),
+                ("catapult", "catapulte", "cata", "siege", "trebuchet"),
                 unit,
             ),
         }
@@ -206,7 +208,14 @@ class AssetLoader:
             ),
         }
         self.ship = self._pick(
-            ["units/unit_ship.png", "units/ship.png", "ship.png", "units/bateau.png", "bateau.png"],
+            [
+                "units/unit_ship.png",
+                "units/unit_bateau.png",
+                "units/ship.png",
+                "units/bateau.png",
+                "ship.png",
+                "bateau.png",
+            ],
             ("ship", "bateau", "navire", "boat", "galere"),
             unit,
         )
@@ -233,4 +242,10 @@ class AssetLoader:
             lines.append(f"  {label}: {found}")
         text = "\n".join(lines)
         print(text)
+        if self._index:
+            print("PNG trouvés :")
+            for path in sorted(self._index.values()):
+                print(f"  {path}")
+        else:
+            print("PNG trouvés : (aucun dans assets/)")
         return text
